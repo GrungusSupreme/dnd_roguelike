@@ -1,5 +1,7 @@
 # dnd_roguelike
 
+DND 5.5e video game with full class features, items, spells and actions. Waves of enemies assault the position and you defeat them to level up and get gold to buy items or upgrade physical defenses. The game is played on a simple grid map with minimal graphic assets and focuses on mimicking DnD 5.5e combat as close to rules-as-written as possible.
+
 Minimal hobby roguelike combat simulator (terminal) — start of a D&D-inspired wave-survival project.
 
 Current files
