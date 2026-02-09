@@ -6,6 +6,7 @@ import random
 import argparse
 from character import Character
 from creator import create_character_interactive
+from character_creator_gui import create_character_gui
 from waves import spawn_wave
 from gui import GameWindow, KEEP_START_X, KEEP_START_Y, KEEP_SIZE, GRID_WIDTH, GRID_HEIGHT
 import dice
@@ -24,6 +25,9 @@ class GameState:
         self.message = ""
         self.message_timer = 0
         self.combat_log = []
+        self.turn_phase = "player_input"  # "player_input" or "processing"
+        self.pause_frames = 0  # Frames to pause before next action
+        self.round_number = 0
         
     def add_enemies(self, enemies: list):
         """Add enemies and place them on the grid (outer regions)."""
@@ -120,17 +124,32 @@ class GameState:
     
     def update(self, window: GameWindow):
         """Update game state each frame."""
-        # Move enemies
-        self.move_enemies()
+        if self.pause_frames > 0:
+            self.pause_frames -= 1
+            if self.message_timer > 0:
+                self.message_timer -= 1
+            return
         
-        # Resolve combat
-        self.resolve_combat()
+        if self.turn_phase == "player_input":
+            self.message = ">>> Your turn! Click to move within the keep <<<"
+            self.message_timer = 999
+            # Waiting for player input (handled in main loop)
+            return
         
-        # Update message timer
+        if self.turn_phase == "processing":
+            # Move enemies
+            self.move_enemies()
+            self.pause_frames = 30  # Show movement for 0.5 seconds
+            
+            # Resolve combat
+            self.resolve_combat()
+            
+            # Switch back to player input
+            self.turn_phase = "player_input"
+            self.pause_frames = 30
+        
         if self.message_timer > 0:
             self.message_timer -= 1
-        else:
-            self.message = ""
 
 
 def main():
@@ -138,16 +157,17 @@ def main():
     parser = argparse.ArgumentParser(description="D&D Roguelike GUI")
     parser.add_argument("--seed", type=int, help="Seed RNG for reproducible runs")
     parser.add_argument("--waves", type=int, default=3, help="Number of waves")
-    parser.add_argument("--create-character", action="store_true", help="Run character creator")
+    parser.add_argument("--create-character", action="store_true", help="Run character creator (GUI by default, use --terminal-creator for text version)")
+    parser.add_argument("--terminal-creator", action="store_true", help="Use terminal character creator instead of GUI")
+    parser.add_argument("--quick-start", action="store_true", help="Skip character creator, use default Hero")
     args = parser.parse_args()
     
     if args.seed:
         random.seed(args.seed)
     
     # Create or load player
-    if args.create_character:
-        player = create_character_interactive()
-    else:
+    if args.quick_start:
+        # Use default hero
         player = Character(
             "Hero",
             hp=30,
@@ -158,6 +178,12 @@ def main():
             dmg_bonus=3,
             initiative_bonus=2,
         )
+    elif args.create_character and args.terminal_creator:
+        # Terminal-based creator
+        player = create_character_interactive()
+    else:
+        # Default: GUI character creator
+        player = create_character_gui()
     
     # Initialize window
     window = GameWindow(cell_size=12)
@@ -179,8 +205,10 @@ def main():
             while window.running and player.is_alive() and any(e.is_alive() for e in enemies):
                 # Handle input
                 clicked = window.handle_events()
-                if clicked:
-                    state.move_player(clicked[0], clicked[1])
+                if clicked and state.turn_phase == "player_input":
+                    if state.move_player(clicked[0], clicked[1]):
+                        state.turn_phase = "processing"
+                        state.round_number += 1
                 
                 # Update game state
                 state.update(window)

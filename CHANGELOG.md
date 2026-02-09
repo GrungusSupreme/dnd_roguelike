@@ -1,23 +1,56 @@
 # dnd_roguelike — Changelog & Project State
 
-**Last Updated:** 2026-02-08  
-**Version:** 0.2 (Pygame GUI framework + Enhanced UI)
+**Last Updated:** 2026-02-08 (Session 2)  
+**Version:** 0.3 (Pygame GUI complete + Character Creator)
 
 This file documents the complete project state for reference when clearing chat history.
+
+---
+
+## 📋 Session 2 Summary (2026-02-08)
+
+### ✅ Completed This Session
+- **Turn-based GUI gameplay** — Added pause/wait system so combat is readable (0.5s pauses between actions)
+- **GUI Character Creator** — Full 3-screen flow (class select → name input → review stats → battle)
+  - All 12 classes with correct stats  
+  - Smooth GUI buttons with hover effects
+  - Integrated into main_gui.py (default mode)
+- **Python 3.11 Environment** — Installed, configured, tested
+- **Linting fixed** — All files now error-free (0 red errors)
+- **Pygame validated** — GUI tested and working on Python 3.11
+
+### 🎮 How to Play Now
+```powershell
+# GUI with character creator (default)
+py -3.11 main_gui.py
+
+# Skip creator, use default Hero
+py -3.11 main_gui.py --quick-start
+
+# Terminal version (still works)
+python main.py --interactive
+```
+
+### 📊 Test Status
+✅ **15/15 tests passing** (100%)  
+✅ No syntax errors  
+✅ All imports resolved
+
+---
 
 ## 📊 Current Status
 
 ### ✅ What's Complete
 - **Terminal game** - Fully playable, color-coded UI, all mechanics working
-- **Pygame GUI framework** - 64×64 grid, 8×8 keep defense, enemy pathfinding (needs Python 3.11+)
+- **Pygame GUI** - 64×64 grid, 8×8 keep, turn-based combat, character creator (Python 3.11 only)
 - **Test suite** - 15 unit tests, all passing
-- **Character system** - 12 classes, point-buy customization, leveling
-- **Combat mechanics** - D&D 5.5e rules-as-written (initiative, attacks, crits, loot, XP)
+- **Character system** - 12 classes, leveling, loot, XP progression
+- **Combat mechanics** - D&D 5.5e initiative, attacks, crits, healing
 
 ### ⚠️ Known Limitations
-- Pygame requires Python 3.11 or older (3.14 has distutils issue)
-- GUI is text-free, uses simple shapes (circles for chars, rectangles for UI)
-- Enemy AI is basic (straight pathfinding to keep)
+- Pygame requires Python 3.11 (3.14 has distutils)
+- GUI characters shown as circles, no sprite graphics yet
+- Enemy AI basic (straight pathfinding)
 
 ## 🎮 Game Overview
 
@@ -25,29 +58,31 @@ This file documents the complete project state for reference when clearing chat 
 
 **Two Play Modes:**
 1. **Terminal** (main.py) - Text-based, full interactivity, colorized
-2. **Pygame GUI** (main_gui.py) - Visual grid, 60 FPS, real-time enemy movement
+2. **Pygame GUI** (main_gui.py) - Visual grid, turn-based, character creator
 
 **Core Loop:**
-- Enemies spawn in waves (scale gets harder each wave)
+- Choose/create character
+- Enemies spawn in waves 
 - Player fights to win XP, gold, loot
 - Level up to gain stats
 - Survive N waves to win
 
-## Project snapshot (2026-02-08)
-- Language: Python 3.14 (3.11 for pygame support)
+## Project snapshot (2026-02-08, Session 2)
+- Language: Python 3.14 (tests/terminal) + Python 3.11 (Pygame)
 - Tests: `unittest` (15 tests, 100% passing)
-- Entries: 
-  - `main.py` — interactive terminal combat
-  - `main_gui.py` — pygame visual grid (requires pygame)
+- GUI Framework: Fully functional and tested
+- Files: 14 Python files + 5 .md docs (ARCHITECTURE, ROADMAP, QUICKSTART, README, GUI_NOTES)
 
 ## Key modules
-- `main.py`: combat loop, initiative ordering, CLI flags (`--interactive`, `--create-character`, `--seed`, `--waves`, `--no-delay`, `--single-key`).
-- `character.py`: `Character` model (HP, AC, attack, damage, potions, gold, bounty, XP & leveling, basic actions).
-- `dice.py`: `roll_die` / `roll_dice` helpers.
-- `monsters.py`: enemy factory used by `waves.py`.
-- `waves.py`: `spawn_wave()` helper for wave scaling.
-- `items.py`: `Item` dataclass and simple item handling.
-- `creator.py`: interactive character creator with 12 D&D base classes and optional point-buy.
+- `main.py`: interactive terminal combat with colors
+- `main_gui.py`: pygame main loop, turn-based gameplay
+- `gui.py`: pygame rendering (grid, keep, characters, UI panel)
+- `character_creator_gui.py`: pygame GUI character creator (12 classes)
+- `character.py`: Character model with D&D mechanics
+- `waves.py`: Enemy spawning with wave scaling
+- `creator.py`: Terminal character creator (fallback)
+- `colors.py`: ANSI color codes for terminal UI
+- Support: `dice.py`, `monsters.py`, `items.py`
 - `tests/`: unit tests covering combat, initiative, items, healer, loot, and leveling.
 
 ## Design decisions / mechanics

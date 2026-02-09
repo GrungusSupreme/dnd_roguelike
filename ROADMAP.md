@@ -1,7 +1,7 @@
 # Development Roadmap & Decision Tree
 
-**Current Version:** 0.2  
-**Date:** 2026-02-08
+**Current Version:** 0.3  
+**Date:** 2026-02-08 (Session 2)
 
 This document helps you (or the next AI) decide what to work on next.
 
@@ -11,7 +11,7 @@ This document helps you (or the next AI) decide what to work on next.
 
 - [x] Terminal game (fully playable)
 - [x] Interactive combat system
-- [x] Character creation with 12 classes
+- [x] Character creation (terminal + **GUI version confirmed working**)
 - [x] Leveling system with XP progression
 - [x] Loot and gold collection
 - [x] Item drops (potions)
@@ -19,65 +19,111 @@ This document helps you (or the next AI) decide what to work on next.
 - [x] Attack rolls, critical hits, damage calculation
 - [x] Color-coded UI (terminal)
 - [x] Unit tests (15 tests, all passing)
-- [x] Pygame GUI framework (needs Python 3.11)
+- [x] **Pygame GUI framework - Tested and working on Python 3.11**
+- [x] **Turn-based combat with pauses (readable gameplay)**
+- [x] **GUI Character Creator (full 3-screen flow)**
+- [x] Python 3.11 environment setup
+- [x] All linting errors fixed
 - [x] Documentation (comprehensive)
 
 ---
 
-## 🔧 What Needs Work
+## 🔧 Next Priority Tasks
 
-### High Priority (Easy to Medium)
+### High Priority (Polish & Playability)
 
-**1. Test Pygame GUI on Python 3.11**
-- Status: Framework complete, but unverified in actual play
-- Time: 30 minutes
-- Steps:
-  1. Set up Python 3.11 environment
-  2. Install pygame
-  3. Run: `python main_gui.py --seed 42 --waves 1`
-  4. Play a few waves, test click-to-move and combat
-  5. Note any visual/gameplay issues
-- Next: Report bugs and refine rendering
-
-**2. Add Visual Sprites to GUI**
-- Status: Characters are circles, keep is rectangle
+**1. Add Visual Sprites to GUI** ⭐ (RECOMMENDED NEXT)
+- Status: Characters are circles, keep is rectangle - looks bare
 - Time: 1-2 hours
 - Approach:
-  - Use simple shapes or emoji/Unicode symbols
-  - Different colors for different enemy types
-  - Keep it simple: no asset files needed yet
+  - Use colored rectangles/shapes for different enemy types
+  - Player = green circle, Enemies = red/different colors by type
+  - Keep = outlined rectangle (already done)
+  - Add text labels under characters (enemy names)
+- Impact: Makes game feel more polished
 - Example:
   ```python
-  if is_player:
-      symbol = "🧙"  # Wizard
-  elif enemy.behavior == "healer":
-      symbol = "⚕️"   # Healer
-  else:
-      symbol = "👹"   # Regular enemy
+  # In gui.py draw_character():
+  if is_enemy and "goblin" in character.name.lower():
+      pygame.draw.rect(screen, RED, char_rect)  # Goblin = rect
+  elif is_enemy and "archer" in character.name.lower():
+      pygame.draw.circle(screen, ORANGE, center)  # Archer = orange
   ```
 
-**3. Add Ranged Combat**
+**2. Add Ranged Combat**
 - Status: All attacks are melee (adjacent only)
 - Time: 2-3 hours
 - Changes needed:
-  - Add `range` property to Character
-  - Modify attack logic to check distance
-  - Some enemies attack from outside keep
-- Example:
-  ```python
-  def can_attack(self, target, distance):
-      return distance <= self.range
-  ```
+  - Add `range` property to Character (e.g., Archers = 3 cells)
+  - Modify attack logic: `if distance <= self.range: can_attack()`
+  - Update enemy AI to attack from distance
+  - Test with ranged enemies in waves
+- Impact: Significant gameplay variety
 
-**4. More Enemy Variety**
-- Status: Only basic Goblin/Archer/Champion
-- Time: 1-2 hours
+**3. More Enemy Variety**
+- Status: Only Goblin/Archer/Champion
+- Time: 1-2 hours  
 - Add to monsters.py:
-  - Orc (melee, high damage)
-  - Skeleton (ranged, low HP)
-  - Troll (melee, regenerates)
-  - Mage (ranged, casts spells)
-- Make waves spawn different mixes
+  - **Orc** - Melee, high damage (1d12+3), medium AC
+  - **Skeleton** - Ranged, fragile (low HP), d20+2 attack
+  - **Troll** - Melee, high HP, regenerates (heals 2 HP/turn)
+  - **Mage** - Ranged spellcaster, low HP, can debuff
+- Make waves mix enemy types
+- Impact: Prevents boring predictable waves
+
+---
+
+## 📋 Medium Priority (Feature Expansion)
+
+**4. Class-Specific Abilities** (Medium - 4-6 hours)
+- Barbarian: Rage (double damage, -2 AC for 3 turns)
+- Rogue: Sneak Attack (extra damage if at range, once per target)
+- Cleric: Healing (heal self or ally for 2d4+WIS)
+- Wizard: Fireball (AoE damage in 10ft radius)
+- Paladin: Smite (add 2d6 to next attack)
+- Bard: Inspire Ally (bonus attack for ally)
+
+**5. Equipment System** (Medium - 4-5 hours)
+- Drop better weapons/armor from loot
+- Equipment affects AC, attack_bonus, damage
+- UI to show equipped items
+- Example: `Hero has Longsword (+1 dmg), Plate Armor (+2 AC)`
+
+**6. Status Effects** (Medium - 3-4 hours)
+- Poison (take damage each turn)
+- Stun (skip next turn)
+- Bleed (cumulative damage)
+- Strength boost (+1 attack for N turns)
+- Track active effects in Character
+
+---
+
+## 🌟 Low Priority (Polish & Scope)
+
+- [ ] Save/load game state (pickle Character/GameState)
+- [ ] Leaderboard (high scores with date)
+- [ ] Sound effects (pygame.mixer)
+- [ ] Animation (smooth character movement)
+- [ ] Better grid visuals (hexagonal grid option)
+- [ ] Map system (multiple keep areas)
+
+---
+
+## Quick Decision Matrix
+
+**If you have 30 min:** Add sprite colors/shapes  
+**If you have 1-2 hours:** Sprite polish + ranged combat baseline  
+**If you have 3-4 hours:** Ranged combat + more enemy types  
+**If you have 5+ hours:** Start on class abilities  
+
+---
+
+## How to Resume
+1. Read CHANGELOG.md for Session 2 summary
+2. Run: `py -3.11 main_gui.py` to verify everything works
+3. Pick task from above (recommended: Visual Sprites first)
+4. Update ROADMAP when tasks complete
+5. Before clearing chat: Update CHANGELOG + ROADMAP + commit
 
 ### Medium Priority (Medium to Hard)
 
