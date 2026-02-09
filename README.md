@@ -1,88 +1,130 @@
 # dnd_roguelike
 
-DND 5.5e video game with full class features, items, spells and actions. Waves of enemies assault the position and you defeat them to level up and get gold to buy items or upgrade physical defenses. The game is played on a simple grid map with minimal graphic assets and focuses on mimicking DnD 5.5e combat as close to rules-as-written as possible.
+DND 5.5e video game with full class features, items, spells and actions. Waves of enemies assault the position and you defend a central **8x8 keep** on a larger **64x64 battle grid**. Enemies advance from the outer regions, and you position yourself tactically to defeat them. The game focuses on mimicking D&D 5.5e combat as close to rules-as-written as possible.
 
-Minimal hobby roguelike combat simulator (terminal) — start of a D&D-inspired wave-survival project.
+Pygame-based tactical roguelike with wave-survival mechanics.
 
-Current files
-- `main.py`: simple combat demo with `Character`, `roll_die`, and `roll_dice`.
+## Quick Start
 
-Run the demo
-
-```powershell
-python main.py
-```
-
-Interactive play
-
-Start the demo interactively to choose targets each turn:
+### GUI Version (Recommended)
 
 ```powershell
-python main.py
-# then respond 'y' when prompted "Play interactively? (y/N):"
+python main_gui.py
 ```
 
-Controls during interactive combat:
-- Enter the enemy number to attack that enemy.
-- Enter `s` to show player stats.
-- Enter `q` to quit the combat.
+This launches the graphical battle grid. Click anywhere within the keep (green area) to move, and automatically attack adjacent enemies.
 
-CLI options
+**Controls:**
+- **Left Click**: Move to that position within the keep
+- **ESC or Close Window**: Exit game
 
-- `--interactive, -i`: prompt for choices each player turn (same as interactive prompt)
-- `--single-key`: use single-key input (Windows only, uses `msvcrt.getwch` so no Enter required)
-- `--seed <n>`: seed RNG for reproducible runs (e.g., `--seed 42`)
-- `--waves <n>`: run a specific number of waves (default 3)
-
-Examples
+### Interactive Terminal Version
 
 ```powershell
-python main.py --interactive --single-key --seed 42 --waves 5
-python main.py --seed 123
+python main.py --interactive
 ```
 
-No-delay (fast testing)
+Text-based version with full command input each turn.
 
-Use `--no-delay` to skip the short pause between rounds, useful for fast manual testing or when running many waves:
+**Options for `main.py`:**
+- `--interactive, -i`: prompt for choices each player turn
+- `--create-character`: run character creator before starting
+- `--single-key`: Windows only, single-key input (no Enter required)
+- `--seed <n>`: seed RNG for reproducible runs
+- `--waves <n>`: number of waves (default 3)
+- `--no-delay`: skip delays between rounds
 
+**Terminal Controls:**
+- `1-9`: Attack enemy number
+- `h`: Heal with potion
+- `d`: Defend (+2 AC)
+- `s`: Show stats
+- `q`: Quit
+
+## Battle Grid System
+
+**Grid Layout:**
+- **64x64** total battle area
+- **8x8 keep** (green-highlighted) - defended position in the center
+- **Outer regions** - where enemies spawn and advance from
+
+**Mechanics:**
+- Player can only move within the 8x8 keep
+- Enemies automatically move toward the keep
+- Adjacent enemies (within 1 cell) auto-attack
+- Positioning affects defense and survival## Requirements
+
+- Python 3.10+
+- `pygame` (for GUI version)
+
+Install dependencies:
 ```powershell
-python main.py --no-delay
+pip install pygame
 ```
 
-Loot and gold
+## Features
 
-Enemies drop a small `bounty` when defeated. The player's gold is tracked on the `Character` and printed when looting enemies.
+**Core Mechanics:**
+- Full D&D 5.5e initiative system (d20 + modifier, tiebreakers)
+- Attack rolls with natural 20 criticals (double damage dice)
+- Armor class (AC) system with defense actions
+- Health points and leveling
 
-Items and inventory
+**Progression:**
+- Enemies award XP on defeat: `bounty * 10`
+- Level up when reaching `100 * level` XP
+- Each level: +5 max HP, +1 attack bonus, +1 AC every 2 levels
+- Gold collected from enemy bounties
 
-- Enemies can drop items (currently `Potion`) with a small chance. Collected items are stored on the player's `inventory` and may affect `potions` count.
-- Use potions during combat with the `h` action (heal).
+**Items & Abilities:**
+- Healing potions (8 HP restore)
+- Chance to loot items from defeated enemies
+- Defend action: +2 AC for one round
 
-XP and Leveling
+**Character Classes:**
+12 playable classes with presets: Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard
 
-- Enemies award XP when defeated (simple formula: `bounty * 10`).
-- Players gain levels when reaching XP thresholds (`100 * level`), which increases `max_hp`, `attack_bonus`, and sometimes `AC`.
+**Character Customization:**
+Ability score point-buy system (27 points, range 8-15, standard D&D 5e costs)
 
-Leveling details
+## Testing
 
-- XP curve: you need `100 * current_level` XP to reach the next level.
-- On level up: `level` increments by 1, `max_hp` increases by 5 (and you heal up to +5), `attack_bonus` increases by 1, and every 2 levels your `AC` increases by 1.
-- XP is granted automatically when an enemy with a `bounty` is killed during `run_combat`.
-
-Character Creator & Point-Buy
-
-- Start the interactive character creator before running the demo:
-
+Run unit tests:
 ```powershell
-python main.py --create-character --interactive
+python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-- The creator presents 12 base classes (Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard) as presets.
-- After choosing a class you can optionally customize ability scores using a 27-point buy (scores start at 8, min 8, max 15). Costs follow the standard 5e-like table: `{8:0,9:1,10:2,11:3,12:4,13:5,14:7,15:9}`.
-- Point-buy affects the created `Character` by applying simple ability modifiers: Con modifies HP, Str modifies attack and damage, Dex modifies initiative and AC, etc. This is intentionally lightweight for the roguelike demo.
+All 15 tests verify combat mechanics, leveling, loot, and wave scaling.
 
-Notes
-- The creator is interactive in-terminal and intended for local play. If you want non-interactive creation (for tests or automation) I can add a CLI flag to pass a JSON file describing the character.
+## Project Structure
+
+```
+main_gui.py          - Pygame GUI entry point
+gui.py              - Pygame window and rendering
+main.py             - Terminal version entry point  
+character.py        - Character class and combat
+creator.py          - Character creator with point-buy
+waves.py            - Enemy wave spawning & scaling
+items.py            - Item system
+dice.py             - Dice rolling utilities
+colors.py           - Terminal color formatting
+tests/              - Unit tests
+```
+
+## Development Notes
+
+The GUI version features:
+- **64x64 grid** with visual rendering
+- **8x8 keep** (defend this region)
+- **Tactical positioning** - click to move within keep
+- **Auto-combat** when adjacent to enemies
+- Real-time enemy movement toward keep
+
+Terminal version retains:
+- Full interactive turn-by-turn control
+- Character customization
+- Reproducible runs with `--seed`
+- Color-coded feedback
 
 
 

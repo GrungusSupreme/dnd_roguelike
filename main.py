@@ -5,6 +5,7 @@ from character import Character
 from creator import create_character_interactive
 from waves import spawn_wave
 import dice
+from colors import Colors, success, error, warning, info, player_action, enemy_action, header, divider, bold
 
 try:
 	import msvcrt
@@ -40,7 +41,9 @@ def run_combat(player, enemies, interactive=False):
 	round_num = 0
 	while player.is_alive() and any(e.is_alive() for e in enemies):
 		round_num += 1
-		print(f"\n-- Round {round_num} --")
+		print(f"\n{Colors.BOLD}{Colors.MAGENTA}{'█'*50}{Colors.RESET}")
+		print(f"{Colors.BOLD}{Colors.MAGENTA}  ROUND {round_num}{Colors.RESET}")
+		print(f"{Colors.BOLD}{Colors.MAGENTA}{'█'*50}{Colors.RESET}")
 		for actor, init, raw, is_player in combatants:
 			if not actor.is_alive():
 				continue
@@ -52,33 +55,46 @@ def run_combat(player, enemies, interactive=False):
 					if not alive:
 						break
 					while True:
-						print("Your turn. Enemies:")
+						# Display player status and enemy list
+						print("\n" + "="*50)
+						print(f"{Colors.BLUE}{Colors.BOLD}[YOUR TURN]{Colors.RESET} HP: {player.hp}/{player.max_hp} | AC: {player.ac} | Gold: {player.gold} | Potions: {player.potions}")
+						print("="*50)
+						print(f"\n{Colors.YELLOW}Enemies in combat:{Colors.RESET}")
 						for idx, e in enumerate(alive, start=1):
-							print(f"  {idx}. {e.name} (HP {e.hp})")
+							hp_bar = "█" * (e.hp // 5) + "░" * ((e.max_hp - e.hp) // 5)
+							print(f"  {idx}. {e.name:12} [{hp_bar}] HP {e.hp}/{e.max_hp}")
+						
+						print(f"\n{Colors.CYAN}--- Actions ---{Colors.RESET}")
+						print("  (1-9)  Attack enemy (by number)")
+						print("  (h)    Use healing potion")
+						print("  (d)    Defend (+2 AC this round)")
+						print("  (s)    Show detailed stats")
+						print("  (q)    Quit combat")
+						
 						if msvcrt and single_key_mode:
-							print("Press a number to attack, 'a' to attack, 'h' heal, 'd' defend, 's' stats, 'q' quit (single-key):", end=" ", flush=True)
-							ch = msvcrt.getwch()
-							print(ch)
-							choice = ch.strip().lower()
+							choice = msvcrt.getwch().strip().lower()
+							print()
 						else:
-							choice = input("Choose enemy number to attack, 'a' attack, 'h' heal, 'd' defend, 's' stats, 'q' quit: ").strip().lower()
+							choice = input(f"\n{Colors.BLUE}> Choose action:{Colors.RESET} ").strip().lower()
 
 						if choice == "q":
-							print("You quit the combat.")
+							print(error("You quit the combat."))
 							return False
 						if choice == "s":
-							print(f"Player HP: {player.hp}, AC: {player.ac}")
+							print(f"\n{bold('[STATS]')} Level {player.level} | HP {player.hp}/{player.max_hp} | AC {player.ac}")
+							print(f"        Attack Bonus: +{player.attack_bonus} | Damage: {player.dmg_num}d{player.dmg_die}+{player.dmg_bonus}")
+							print(f"        Gold: {player.gold} | XP: {player.xp}/{100*player.level} to next level")
 							continue
-						if choice == "h" or choice == "heal":
+						if choice == "h":
 							healed = player.use_potion(8)
 							if healed:
-								print(f"You use a potion and heal {healed} HP (HP {player.hp}). Potions left: {player.potions}")
+								print(success(f"You use a potion and heal {healed} HP (now {player.hp}/{player.max_hp}). Potions left: {player.potions}"))
 							else:
-								print("No potions left!")
+								print(error("No potions left!"))
 							break
-						if choice == "d" or choice == "defend":
+						if choice == "d":
 							player.defend(ac_bonus=2)
-							print("You brace for incoming attacks (+2 AC this round).")
+							print(success("You brace for incoming attacks (+2 AC this round)."))
 							break
 						if choice.isdigit():
 							idx = int(choice) - 1
@@ -89,7 +105,7 @@ def run_combat(player, enemies, interactive=False):
 								# if we killed an enemy, award bounty
 								if pre_alive and not target.is_alive() and getattr(target, "bounty", 0) > 0:
 									actor.gold += target.bounty
-									print(f"You loot {target.bounty} gold (total {actor.gold}).")
+									print(success(f"{target.name} defeated! You loot {target.bounty} gold (total {actor.gold})."))
 									# small chance to drop an item (potion)
 									drop_roll = dice.roll_die(100)
 									if drop_roll <= 30:
@@ -97,16 +113,20 @@ def run_combat(player, enemies, interactive=False):
 
 										potion = Item("Potion", "potion", value=8)
 										actor.add_item(potion)
-										print(f"{target.name} dropped a Potion! ({actor.potions} potions now)")
+										print(info(f"{target.name} dropped a Potion! ({actor.potions} potions now)"))
 									# award XP on kill (simple: bounty * 10)
 									xp_gain = getattr(target, "bounty", 0) * 10
 									if xp_gain > 0:
 										levels = actor.add_xp(xp_gain)
-										print(f"{actor.name} gains {xp_gain} XP (level {actor.level}, xp {actor.xp}).")
+										print(info(f"You gain {xp_gain} XP (level {actor.level})."))
+								else:
+									print(player_action(f"You attack {target.name}."))
 								break
-						print("Invalid choice, try again.")
+						print(warning("Invalid choice, try again."))
 					if not any(e.is_alive() for e in enemies):
-						print("All enemies defeated! You win.")
+						print("\n" + "="*50)
+						print(f"{Colors.GREEN}{Colors.BOLD}All enemies defeated! You win this round!{Colors.RESET}")
+						print("="*50)
 						return True
 				else:
 					# auto-attack first alive enemy
@@ -146,16 +166,21 @@ def run_combat(player, enemies, interactive=False):
 							target = min(allies, key=lambda x: x.hp)
 							healed = actor.heal_ally(target, 6)
 							if healed:
-								print(f"{actor.name} heals {target.name} for {healed} HP (potions left: {actor.potions}).")
+								print(enemy_action(f"  {actor.name} heals {target.name} for {healed} HP."))
 							else:
 								# fallback: attack player if no potion
 								actor.attack(player)
+								print(enemy_action(f"  {actor.name} attacks you!"))
 						else:
 							actor.attack(player)
+							print(enemy_action(f"  {actor.name} attacks you!"))
 					else:
 						actor.attack(player)
+						print(enemy_action(f"  {actor.name} attacks you!"))
 					if not player.is_alive():
-						print("You have been slain.")
+						print("\n" + "="*50)
+						print(error("You have been slain."))
+						print("="*50)
 						return False
 		if not no_delay:
 			time.sleep(0.4)
@@ -163,6 +188,11 @@ def run_combat(player, enemies, interactive=False):
 		for a, _, _, _ in combatants:
 			if hasattr(a, "temp_ac_bonus"):
 				a.temp_ac_bonus = 0
+		
+		# brief round summary
+		alive_enemies = [e for e in enemies if e.is_alive()]
+		if alive_enemies and player.is_alive():
+			print(f"\n{Colors.DIM}[Round {round_num} End] Player HP: {player.hp}/{player.max_hp} | Enemies: {len(alive_enemies)} remaining{Colors.RESET}")
 	return player.is_alive()
 
 
@@ -241,11 +271,13 @@ if __name__ == "__main__":
 		player = player
 
 	for wave in range(1, args.waves + 1):
-		print(f"\n=== Wave {wave} ===")
+		print(f"\n{Colors.BOLD}{Colors.CYAN}{'═'*50}{Colors.RESET}")
+		print(f"{Colors.BOLD}{Colors.CYAN}  WAVE {wave}{Colors.RESET}")
+		print(f"{Colors.BOLD}{Colors.CYAN}{'═'*50}{Colors.RESET}")
 		enemies = spawn_wave(wave)
 		survived = run_combat(player, enemies, interactive=interactive_mode)
 		if not survived:
-			print(f"You survived {wave-1} waves.")
+			print(f"\n{error(f'Game Over - You survived {wave-1} waves.')}")
 			break
 	else:
-		print(f"You survived all {args.waves} waves! Victory!")
+		print(f"\n{Colors.GREEN}{Colors.BOLD}🏆 VICTORY! You survived all {args.waves} waves!{Colors.RESET}")
