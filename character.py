@@ -1,9 +1,10 @@
 """Character model and combat actions."""
 import dice
+from class_features import get_class_features
 
 
 class Character:
-    def __init__(self, name, hp, ac, attack_bonus, dmg_num, dmg_die, dmg_bonus=0, initiative_bonus=0, potions=0, bounty=0, behavior=None):
+    def __init__(self, name, hp, ac, attack_bonus, dmg_num, dmg_die, dmg_bonus=0, initiative_bonus=0, potions=0, bounty=0, behavior=None, class_name=None, ability_scores=None):
         self.name = name
         self.hp = hp
         self.max_hp = hp
@@ -19,6 +20,14 @@ class Character:
         self.bounty = bounty
         self.behavior = behavior
         self.inventory = []
+        self.class_name = class_name or "Hero"
+        self.features = get_class_features(self.class_name)
+        
+        # Ability scores (STR, DEX, CON, INT, WIS, CHA)
+        # If not provided, defaults to standard physical scores
+        if ability_scores is None:
+            ability_scores = {"STR": 10, "DEX": 10, "CON": 10, "INT": 10, "WIS": 10, "CHA": 10}
+        self.ability_scores = ability_scores
 
     def is_alive(self):
         return self.hp > 0
@@ -112,3 +121,82 @@ class Character:
             return 0
         self.potions -= 1
         return target.heal(amount)
+    def use_feature(self, feature_name):
+        """Use a class feature if available.
+        
+        Args:
+            feature_name: Name of the feature to use (e.g., "Rage").
+            
+        Returns:
+            True if feature was available and used, False otherwise.
+        """
+        for feature in self.features:
+            if feature.name == feature_name:
+                return feature.use()
+        return False
+    
+    def get_feature(self, feature_name):
+        """Get a feature by name.
+        
+        Args:
+            feature_name: Name of the feature.
+            
+        Returns:
+            ClassFeature object or None if not found.
+        """
+        for feature in self.features:
+            if feature.name == feature_name:
+                return feature
+        return None
+    
+    def get_available_features(self):
+        """Get list of features that have uses remaining.
+        
+        Returns:
+            List of available ClassFeature objects.
+        """
+        return [f for f in self.features if f.uses_remaining > 0 or f.max_uses is None]
+    
+    def rest_features(self):
+        """Restore all features on a long rest (typically between waves)."""
+        for feature in self.features:
+            if feature.recharge == "rest":
+                feature.restore()
+    
+    def display_features(self):
+        """Return a formatted string of all class features.
+        
+        Returns:
+            Multi-line string showing feature names and usage.
+        """
+        if not self.features:
+            return "No class features."
+        lines = []
+        for feature in self.features:
+            if feature.max_uses is None:
+                status = "[Always available]"
+            else:
+                status = f"[{feature.uses_remaining}/{feature.max_uses} uses]"
+            lines.append(f"  {feature.name}: {status}")
+        return "\n".join(lines)
+    
+    def get_ability_modifier(self, ability: str) -> int:
+        """Calculate ability modifier from ability score.
+        
+        Args:
+            ability: Ability name (STR, DEX, CON, INT, WIS, CHA)
+            
+        Returns:
+            Ability modifier (formula: (score - 10) // 2)
+        """
+        score = self.ability_scores.get(ability, 10)
+        return (score - 10) // 2
+    
+    def get_all_modifiers(self) -> dict:
+        """Get modifiers for all abilities.
+        
+        Returns:
+            Dict with ability names as keys and modifiers as values.
+        """
+        return {ability: self.get_ability_modifier(ability) 
+                for ability in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]}

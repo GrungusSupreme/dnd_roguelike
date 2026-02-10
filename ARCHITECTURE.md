@@ -1,7 +1,7 @@
 # Architecture & Design Document
 
-**Date:** 2026-02-08  
-**Status:** Production-ready terminal, GUI framework complete  
+**Date:** 2026-02-09 (Updated: Ability Score System)  
+**Status:** Core mechanics formula-based (2024 D&D), GUI framework complete  
 **Python:** 3.11+ for gameplay, 3.14 tests only (no pygame on 3.14)
 
 ---
@@ -40,11 +40,21 @@ WAVE WON / PLAYER SLAIN
 ### character.py - Core Mechanics
 **Class:** `Character`
 - **Stats:** `hp, max_hp, ac, attack_bonus, dmg_num, dmg_die, dmg_bonus, initiative_bonus`
+- **Ability Scores:** `ability_scores = {STR, DEX, CON, INT, WIS, CHA}` (new in v0.5)
 - **Progression:** `level, xp, gold, potions`
 - **Optional:** `behavior` (e.g., "healer"), `bounty` (enemy only), `name`
 
+**Ability Score System:**
+- Scores range [8-15] using standard array [15, 14, 13, 12, 10, 8]
+- Modifiers calculated: `(score - 10) // 2` (2024 D&D formula)
+- Example: STR 15 = +2 modifier, CON 14 = +2 modifier, WIS 10 = 0 modifier
+- All classes have DEFAULT_ABILITY_SCORES configured in class_definitions.py
+- New methods: `get_ability_modifier(ability)`, `get_all_modifiers()`
+
 **Key Methods:**
 ```python
+get_ability_modifier(ability: str) -> int  # Get ability mod (STR, DEX, CON, INT, WIS, CHA)
+get_all_modifiers() -> dict                 # Get all 6 modifiers at once
 attack(target)              # Roll d20 vs AC, apply damage
 defend(ac_bonus=2)          # Increase AC for one round
 roll_initiative()           # Roll d20 + init_bonus
@@ -59,6 +69,42 @@ heal_ally(target, amount)   # Heal another character
 - Damage: `dmg_num d dmg_die + dmg_bonus`
 - Defense: +2 AC for one round (then resets)
 - Leveling: XP needed = `100 * current_level`
+
+### class_definitions.py - 2024 D&D Formulas & Class Data
+**Purpose:** Verified class definitions from http://dnd2024.wikidot.com/
+
+**Classes:** All 13 classes with hit dies, proficiencies, and calculation formulas
+
+**Key Structures:**
+```python
+ClassDefinition:
+    - name: str (Barbarian, Fighter, Wizard, etc.)
+    - hit_die: int (d6, d8, d10, d12)
+    - primary_ability: str (STR, DEX, CON, INT, WIS, CHA)
+    - saving_throw_proficiencies: list
+    - armor_training: str (describes what armor available)
+    - weapon_proficiencies: str (Simple, Martial, etc.)
+    - source_url: str (link to 2024 D&D wiki for verification)
+  
+DEFAULT_ABILITY_SCORES:
+    - One entry per class with standard array [15, 14, 13, 12, 10, 8]
+    - Distribution based on class strengths
+    - Example: Barbarian = {STR:15, CON:14, WIS:13, DEX:12, INT:10, CHA:8}
+```
+
+**Stat Generation Function:**
+```python
+generate_level_1_stats(class_name, ability_scores=None) -> dict
+    Returns: {hp, ac, attack_bonus, dmg_num, dmg_die, dmg_bonus, 
+                         initiative_bonus, ability_scores}
+
+    Formulas (2024 D&D):
+        HP = (hit_die // 2 + 1) + CON modifier
+        AC = Armor base AC + DEX mod (varies: light 11, medium 12, heavy 16)
+        Attack Bonus = Ability modifier + proficiency_bonus
+        Damage Bonus = Ability modifier (STR for melee)
+        Initiative = DEX modifier
+```
 
 ### dice.py - Utilities
 ```python
@@ -77,7 +123,7 @@ spawn_wave(wave_num)  # Returns list of enemies scaled by wave difficulty
 - Enemy Count: 2 + wave number (e.g., Wave 1 = 3 enemies)
 
 ### creator.py - Character Creation
-**Classes:** 12 presets (Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard)
+**Classes:** 13 presets (Artificer, Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard)
 
 **Point Buy System:**
 - 27 points to distribute

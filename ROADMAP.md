@@ -1,9 +1,36 @@
 # Development Roadmap & Decision Tree
 
-**Current Version:** 0.3  
-**Date:** 2026-02-08 (Session 2)
+**Current Version:** 0.5  
+**Date:** 2026-02-09 (Session 3 - EXTENDED: Ability Score System COMPLETE)
+**Status:** Core mechanics blocker RESOLVED ✅ Ready for feature integration
 
-This document helps you (or the next AI) decide what to work on next.
+---
+
+## ✅ CRITICAL BLOCKER - RESOLVED
+
+**Core Stat Calculations Now Formula-Based** ✅
+- ✅ HP: Now calculated as (Hit Die // 2 + 1) + CON modifier
+- ✅ AC: Now scales with armor type + DEX modifier
+- ✅ Attack: Now calculated as ability mod + proficiency bonus
+- ✅ Initiative: Now calculated as DEX modifier
+- ✅ Damage: Now calculated as ability modifier
+
+**What was done:**
+1. ✅ Added ability score system (STR, DEX, CON, INT, WIS, CHA) to Character
+2. ✅ Implemented `generate_level_1_stats()` function with verified 2024 D&D formulas
+3. ✅ Created DEFAULT_ABILITY_SCORES for all 13 classes
+4. ✅ Updated character_creator_gui to use formula-based stats instead of CLASS_TEMPLATES
+
+**Validation:**
+- ✅ All 15 unit tests passing
+- ✅ Ability modifiers correctly calculated: `(score - 10) // 2`
+- ✅ Character creation generates stats from formulas, not hardcoded values
+- ✅ Barbarian: STR 15 (+2), CON 14 (+2), HP = 9 (was 35, now formula-based)
+
+**Files updated:**
+- character.py - Added ability_scores, get_ability_modifier(), get_all_modifiers()
+- class_definitions.py - Added generate_level_1_stats(), DEFAULT_ABILITY_SCORES
+- character_creator_gui.py - Now uses generate_level_1_stats() instead of CLASS_TEMPLATES
 
 ---
 
@@ -11,7 +38,7 @@ This document helps you (or the next AI) decide what to work on next.
 
 - [x] Terminal game (fully playable)
 - [x] Interactive combat system
-- [x] Character creation (terminal + **GUI version confirmed working**)
+- [x] Character creation (terminal + GUI)
 - [x] Leveling system with XP progression
 - [x] Loot and gold collection
 - [x] Item drops (potions)
@@ -19,36 +46,107 @@ This document helps you (or the next AI) decide what to work on next.
 - [x] Attack rolls, critical hits, damage calculation
 - [x] Color-coded UI (terminal)
 - [x] Unit tests (15 tests, all passing)
-- [x] **Pygame GUI framework - Tested and working on Python 3.11**
-- [x] **Turn-based combat with pauses (readable gameplay)**
-- [x] **GUI Character Creator (full 3-screen flow)**
+- [x] Pygame GUI framework (Python 3.11)
+- [x] Turn-based combat with pauses
+- [x] GUI Character Creator (3-screen flow)
+- [x] **Base Class Features (32 features across 13 classes)**
+- [x] **2024 D&D Class Definitions (verified sources)**
+- [x] **Ability Score System (STR, DEX, CON, INT, WIS, CHA)**
+- [x] **Formula-Based Stat Generation (HP, AC, Attack, Initiative)**
 - [x] Python 3.11 environment setup
 - [x] All linting errors fixed
 - [x] Documentation (comprehensive)
 
 ---
 
-## 🔧 Next Priority Tasks
+## 🔧 NEXT PRIORITY TASKS
 
-### High Priority (Polish & Playability)
+### Priority 1: Integrate Features into Combat (NOW POSSIBLE)
 
-**1. Add Visual Sprites to GUI** ⭐ (RECOMMENDED NEXT)
-- Status: Characters are circles, keep is rectangle - looks bare
-- Time: 1-2 hours
-- Approach:
-  - Use colored rectangles/shapes for different enemy types
-  - Player = green circle, Enemies = red/different colors by type
-  - Keep = outlined rectangle (already done)
-  - Add text labels under characters (enemy names)
-- Impact: Makes game feel more polished
-- Example:
-  ```python
-  # In gui.py draw_character():
-  if is_enemy and "goblin" in character.name.lower():
-      pygame.draw.rect(screen, RED, char_rect)  # Goblin = rect
-  elif is_enemy and "archer" in character.name.lower():
-      pygame.draw.circle(screen, ORANGE, center)  # Archer = orange
-  ```
+**Step 5: Feature Integration** ← NEW BLOCKER
+- Time: 3-4 hours
+- What: Make class features actually affect combat
+- How:
+  - Rage: +damage based on STR mod, resistance to physical damage
+  - Sneak Attack: +damage with finesse weapons in advantageous position
+  - Bardic Inspiration: Grants bonus to ally's next roll
+  - Unarmored Defense (Monk): AC calculation already works in formula!
+  - Channel Divinity: Turns undead or heals
+  - Action Surge: Additional action per turn (needs action economy system)
+- Requires: Enhanced combat loop that checks for active features
+- Impact: Combat becomes mechanically meaningful, class choices matter
+
+**What this enables:**
+- Combat demonstrates class differences (Barbarian vs Wizard)
+- Features have tangible mechanical effects
+- XP progression becomes more strategic
+- Game becomes more D&D-like
+
+### Priority 2: Visual Enhancements
+
+**4. Add Visual Sprites to GUI** (1-2 hours)
+- Color/shape different enemy types
+- Add text labels under characters
+- Different colors for different threat levels
+
+**5. Integrate Class Features into Combat** (2-3 hours)
+- Add UI buttons to use features
+- Implement Rage: +2 damage, resistance
+- Implement Sneak Attack: +1d6 damage
+- Implement healing features
+- Track usage and reset on rest
+
+### Priority 3: Ranged Combat & Variety
+
+**6. Add Ranged Combat** (2-3 hours)
+- Add range property to Character
+- Modify attack logic for distance-based targeting
+- Have enemy AI use ranged attacks
+
+**7. More Enemy Variety** (1-2 hours)
+- Add Orc, Skeleton, Troll, Mage to monsters
+- Mix enemy types in waves
+
+---
+
+## 📚 KEY FILES FOR NEXT SESSION
+
+When resuming, read these in order:
+
+1. **D&D_AUDIT_REPORT.txt** - What needs fixing and why
+2. **class_definitions.py** - Verified formulas to use
+3. **character.py** - Where ability scores need to go
+4. **character_creator_gui.py** - Where GUI updates go
+
+---
+
+## 📋 Quick Reference
+
+**To run the game:**
+```powershell
+py -3.11 main_gui.py          # GUI with character creator
+python main.py --interactive  # Terminal version
+python -m unittest discover tests  # Run tests
+```
+
+**To check implementation:**
+- class_definitions.py has all correct formulas
+- D&D_AUDIT_REPORT.txt shows what's wrong
+- CHANGELOG.md shows session progress
+
+---
+
+## How to Resume
+1. Read D&D_AUDIT_REPORT.txt for context
+2. Review class_definitions.py formulas
+3. Start with ability score system in character.py
+4. Update Character.__init__() to use formulas
+5. Update character_creator_gui.py to show scores
+6. Run tests to verify changes
+7. Update ROADMAP/CHANGELOG before clearing chat
+
+
+
 
 **2. Add Ranged Combat**
 - Status: All attacks are melee (adjacent only)

@@ -44,13 +44,10 @@ class GameState:
             self.enemy_positions[enemy] = (x, y)
     
     def move_player(self, target_x: int, target_y: int) -> bool:
-        """Move player if target is within keep area. Return True if moved."""
-        # Check if target is in keep
-        if not (KEEP_START_X <= target_x < KEEP_START_X + KEEP_SIZE and
-                KEEP_START_Y <= target_y < KEEP_START_Y + KEEP_SIZE):
-            self.message = "Can only move within the keep!"
-            self.message_timer = 30
-            return False
+        """Move player to target position on grid. Return True if moved."""
+        # Clamp to grid bounds
+        target_x = max(0, min(GRID_WIDTH - 1, target_x))
+        target_y = max(0, min(GRID_HEIGHT - 1, target_y))
         
         self.player_pos = (target_x, target_y)
         self.message = f"Moved to ({target_x}, {target_y})"

@@ -111,6 +111,7 @@ def create_character_interactive():
         name = "Player"
 
     archetypes = [
+        ("artificer", "Artificer — magical inventor and item crafter."),
         ("barbarian", "Barbarian — hardy melee bruiser (high HP, heavy damage)."),
         ("bard", "Bard — versatile support with social flair and spells."),
         ("cleric", "Cleric — divine caster and healer (starts with potions)."),
@@ -129,6 +130,7 @@ def create_character_interactive():
 
     # base presets for each class
     presets = {
+        "artificer": dict(hp=25, ac=14, attack_bonus=4, dmg_num=1, dmg_die=6, dmg_bonus=1, initiative_bonus=1, potions=1, bounty=1),
         "barbarian": dict(hp=36, ac=14, attack_bonus=6, dmg_num=1, dmg_die=12, dmg_bonus=4, initiative_bonus=1, potions=0, bounty=1),
         "bard": dict(hp=26, ac=13, attack_bonus=5, dmg_num=1, dmg_die=8, dmg_bonus=2, initiative_bonus=2, potions=1, bounty=1),
         "cleric": dict(hp=28, ac=16, attack_bonus=5, dmg_num=1, dmg_die=8, dmg_bonus=2, initiative_bonus=1, potions=2, bounty=1, behavior="healer"),

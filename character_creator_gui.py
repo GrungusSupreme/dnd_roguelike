@@ -2,6 +2,8 @@
 import pygame
 from typing import Optional, Tuple
 from character import Character
+from class_features import get_class_feature_summaries
+from class_definitions import generate_level_1_stats
 
 # Colors (match main GUI)
 COLOR_BG = (10, 10, 20)
@@ -15,6 +17,7 @@ COLOR_BORDER = (100, 150, 200)
 
 # Class templates (from creator.py, simplified)
 CLASS_TEMPLATES = {
+    "Artificer": {"ac": 14, "attack_bonus": 2, "dmg_num": 1, "dmg_die": 6, "dmg_bonus": 1, "hp": 25, "init": 1},
     "Barbarian": {"ac": 13, "attack_bonus": 4, "dmg_num": 1, "dmg_die": 12, "dmg_bonus": 3, "hp": 35, "init": 0},
     "Bard": {"ac": 14, "attack_bonus": 3, "dmg_num": 1, "dmg_die": 8, "dmg_bonus": 2, "hp": 25, "init": 2},
     "Cleric": {"ac": 16, "attack_bonus": 3, "dmg_num": 1, "dmg_die": 8, "dmg_bonus": 2, "hp": 28, "init": 0},
@@ -152,16 +155,20 @@ class CharacterCreatorGUI:
         if not self.selected_class:
             return
         
-        template = CLASS_TEMPLATES[self.selected_class]
+        # Generate stats from class and default ability scores
+        stats = generate_level_1_stats(self.selected_class)
+        
         self.character = Character(
             self.name_input_text or "Hero",
-            hp=template["hp"],
-            ac=template["ac"],
-            attack_bonus=template["attack_bonus"],
-            dmg_num=template["dmg_num"],
-            dmg_die=template["dmg_die"],
-            dmg_bonus=template["dmg_bonus"],
-            initiative_bonus=template["init"],
+            hp=stats["hp"],
+            ac=stats["ac"],
+            attack_bonus=stats["attack_bonus"],
+            dmg_num=stats["dmg_num"],
+            dmg_die=stats["dmg_die"],
+            dmg_bonus=stats["dmg_bonus"],
+            initiative_bonus=stats["initiative_bonus"],
+            class_name=self.selected_class,
+            ability_scores=stats["ability_scores"],
         )
     
     def draw_class_select(self):
@@ -188,20 +195,54 @@ class CharacterCreatorGUI:
         title = self.font_large.render(f"{self.name_input_text} the {self.selected_class}", True, COLOR_TEXT)
         self.screen.blit(title, (self.width // 2 - title.get_width() // 2, 50))
         
-        template = CLASS_TEMPLATES[self.selected_class]
+        assert self.selected_class is not None
+        
+        # Generate stats from class and default ability scores
+        stats = generate_level_1_stats(self.selected_class)
+        ability_scores = stats["ability_scores"]
+        
         y = 150
-        stats = [
-            f"HP: {template['hp']}",
-            f"AC: {template['ac']}",
-            f"Attack: +{template['attack_bonus']}",
-            f"Damage: {template['dmg_num']}d{template['dmg_die']}+{template['dmg_bonus']}",
-            f"Initiative: +{template['init']}",
+        
+        # Show ability scores
+        ability_y = y
+        abilities_text = self.font_small.render("Ability Scores:", True, COLOR_TEXT_SELECTED)
+        self.screen.blit(abilities_text, (30, ability_y))
+        ability_y += 25
+        
+        for ability in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
+            score = ability_scores[ability]
+            mod = (score - 10) // 2
+            mod_str = f"+{mod}" if mod >= 0 else f"{mod}"
+            ability_line = self.font_small.render(f"  {ability} {score} ({mod_str})", True, COLOR_TEXT)
+            self.screen.blit(ability_line, (40, ability_y))
+            ability_y += 20
+        
+        # Show calculated stats
+        y = ability_y + 10
+        calc_stats = [
+            f"HP: {stats['hp']}",
+            f"AC: {stats['ac']}",
+            f"Attack: +{stats['attack_bonus']}",
+            f"Damage: {stats['dmg_num']}d{stats['dmg_die']}+{stats['dmg_bonus']}",
+            f"Initiative: +{stats['initiative_bonus']}",
         ]
         
-        for stat_line in stats:
+        for stat_line in calc_stats:
             stat_text = self.font_medium.render(stat_line, True, COLOR_TEXT)
-            self.screen.blit(stat_text, (self.width // 2 - stat_text.get_width() // 2, y))
-            y += 50
+            self.screen.blit(stat_text, (30, y))
+            y += 35
+        
+        # Display class features
+        y += 10
+        features_title = self.font_medium.render("Class Features:", True, COLOR_TEXT_SELECTED)
+        self.screen.blit(features_title, (30, y))
+        y += 35
+        
+        feature_summary = get_class_feature_summaries(self.selected_class)
+        for line in feature_summary.split("\n"):
+            feature_text = self.font_small.render(line, True, COLOR_TEXT)
+            self.screen.blit(feature_text, (40, y))
+            y += 20
         
         self.confirm_button.draw(self.screen, self.font_medium)
     
@@ -233,4 +274,4 @@ def create_character_gui() -> Character:
     """Run the GUI character creator. Returns a Character."""
     creator = CharacterCreatorGUI()
     character = creator.run()
-    return character or Character("Hero", hp=30, ac=15, attack_bonus=5, dmg_num=1, dmg_die=8, dmg_bonus=3, initiative_bonus=2)
+    return character or Character("Hero", hp=30, ac=15, attack_bonus=5, dmg_num=1, dmg_die=8, dmg_bonus=3, initiative_bonus=2, class_name="Fighter")
