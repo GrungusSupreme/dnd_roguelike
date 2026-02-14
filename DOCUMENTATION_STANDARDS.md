@@ -31,7 +31,6 @@
 - **Do NOT:** Repeat architecture details (use ARCHITECTURE), plan next work (use ROADMAP)
 
 ---
-
 ## Approved Special-Purpose Documents
 
 Some documents are allowed for specific investigative or reference purposes (NOT for session tracking):
@@ -41,15 +40,31 @@ Some documents are allowed for specific investigative or reference purposes (NOT
 - **When to keep:** Document lasts as long as the issue exists (until ability scores implemented)
 - **When to remove:** Once the investigation is complete AND findings are integrated into code/architecture
 
-### **D&D_2024_REFERENCE.md** ✅ APPROVED  
-- **Purpose:** Reference guide for D&D rules (external source documentation)
-- **When to keep:** Always (useful reference for development)
-- **When to remove:** Never (it's not a summary, it's a reference)
+### **SRD 5.2.1 Reference Docs** ✅ APPROVED
+- **Purpose:** Reference guide for SRD 5.2.1 rules used in this project
+- **When to keep:** Always (authoritative for mechanics and content)
+- **Files:**
+   - RULES_REFERENCE.md
+   - CLASS_REFERENCE.md
+   - SPECIES_REFERENCE.md
+   - FEATS_REFERENCE.md
+   - EQUIPMENT_REFERENCE.md
+   - SPELLS_REFERENCE.md
+   - MAGIC_ITEMS_REFERENCE.md
+   - MONSTERS_REFERENCE.md
 
 ### **Other Special Docs** (Examples: API_SPECIFICATION.md, PERFORMANCE_ANALYSIS.md, etc.)
 - Only create if: the document serves a purpose beyond session tracking
 - Only keep if: it continues to be useful as work progresses
 - Otherwise: integrate findings into ARCHITECTURE.md and delete
+
+---
+
+## Rules Reference Policy
+
+- **Use only the SRD 5.2.1 reference docs in this repo** for rules, spells, items, and monsters.
+- **Apply rules consistently across all systems** (combat, classes, loot, AI behavior, UI copy).
+- **Avoid external sources** (wikis, blogs, non-SRD content) to prevent copyright risk.
 
 ---
 

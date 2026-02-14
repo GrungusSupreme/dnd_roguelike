@@ -1,16 +1,8 @@
-"""Class definitions based on verified 2024 D&D source data.
+"""Class definitions based on SRD 5.2.1 reference data.
 
-All values are traceable to http://dnd2024.wikidot.com/ sources.
+All values are traceable to the local reference docs (CLASS_REFERENCE.md,
+RULES_REFERENCE.md, and related SRD 5.2.1 files).
 Each class includes hit die, weapon proficiencies, and armor training.
-
-Reference Links:
-- Barbarian: http://dnd2024.wikidot.com/barbarian:main
-- Fighter: http://dnd2024.wikidot.com/fighter:main
-- Rogue: http://dnd2024.wikidot.com/rogue:main
-- Monk: http://dnd2024.wikidot.com/monk:main
-- Cleric: http://dnd2024.wikidot.com/cleric:main
-- Wizard: http://dnd2024.wikidot.com/wizard:main
-- Etc.
 """
 
 from dataclasses import dataclass
@@ -27,7 +19,6 @@ class ClassDefinition:
     saving_throw_proficiencies: list  # e.g., ["STR", "CON"]
     armor_training: str  # Describes what armor can be worn
     weapon_proficiencies: str  # Simple, Martial, or both
-    source_url: str  # Link to 2024 D&D wiki
     
     def calculate_hp(self, level: int, con_modifier: int) -> int:
         """Calculate HP using 2024 D&D formula: Hit Die + CON modifier per level.
@@ -61,17 +52,8 @@ class ClassDefinition:
             return 6
 
 
-# CLASS DEFINITIONS - Verified from 2024 D&D Wiki
+# CLASS DEFINITIONS - Verified from SRD 5.2.1 reference docs
 CLASS_DEFINITIONS = {
-    "Artificer": ClassDefinition(
-        name="Artificer",
-        hit_die=8,
-        primary_ability="INT",
-        saving_throw_proficiencies=["INT", "WIS"],
-        armor_training="Light and Medium armor",
-        weapon_proficiencies="Simple weapons",
-        source_url="http://dnd2024.wikidot.com/artificer:main",
-    ),
     "Barbarian": ClassDefinition(
         name="Barbarian",
         hit_die=12,
@@ -79,7 +61,6 @@ CLASS_DEFINITIONS = {
         saving_throw_proficiencies=["STR", "CON"],
         armor_training="Light and Medium armor and Shields",
         weapon_proficiencies="Simple and Martial weapons",
-        source_url="http://dnd2024.wikidot.com/barbarian:main",
     ),
     "Bard": ClassDefinition(
         name="Bard",
@@ -88,7 +69,6 @@ CLASS_DEFINITIONS = {
         saving_throw_proficiencies=["CHA", "DEX"],
         armor_training="Light armor",
         weapon_proficiencies="Simple weapons and hand crossbows, longswords, rapiers, shortswords",
-        source_url="http://dnd2024.wikidot.com/bard:main",
     ),
     "Cleric": ClassDefinition(
         name="Cleric",
@@ -97,7 +77,6 @@ CLASS_DEFINITIONS = {
         saving_throw_proficiencies=["WIS", "CHA"],
         armor_training="Light and Medium armor and Shields",
         weapon_proficiencies="Simple weapons",
-        source_url="http://dnd2024.wikidot.com/cleric:main",
     ),
     "Druid": ClassDefinition(
         name="Druid",
@@ -106,7 +85,6 @@ CLASS_DEFINITIONS = {
         saving_throw_proficiencies=["INT", "WIS"],
         armor_training="Light and Medium armor and Shields (no metal)",
         weapon_proficiencies="Simple weapons",
-        source_url="http://dnd2024.wikidot.com/druid:main",
     ),
     "Fighter": ClassDefinition(
         name="Fighter",
@@ -115,7 +93,6 @@ CLASS_DEFINITIONS = {
         saving_throw_proficiencies=["STR", "CON"],
         armor_training="Light, Medium and Heavy armor and Shields",
         weapon_proficiencies="Simple and Martial weapons",
-        source_url="http://dnd2024.wikidot.com/fighter:main",
     ),
     "Monk": ClassDefinition(
         name="Monk",
@@ -124,7 +101,6 @@ CLASS_DEFINITIONS = {
         saving_throw_proficiencies=["STR", "DEX"],
         armor_training="No armor (Unarmored Defense uses DEX + WIS)",
         weapon_proficiencies="Simple weapons and shortswords",
-        source_url="http://dnd2024.wikidot.com/monk:main",
     ),
     "Paladin": ClassDefinition(
         name="Paladin",
@@ -133,7 +109,6 @@ CLASS_DEFINITIONS = {
         saving_throw_proficiencies=["WIS", "CHA"],
         armor_training="Light, Medium and Heavy armor and Shields",
         weapon_proficiencies="Simple and Martial weapons",
-        source_url="http://dnd2024.wikidot.com/paladin:main",
     ),
     "Ranger": ClassDefinition(
         name="Ranger",
@@ -142,7 +117,6 @@ CLASS_DEFINITIONS = {
         saving_throw_proficiencies=["STR", "DEX"],
         armor_training="Light and Medium armor and Shields",
         weapon_proficiencies="Simple and Martial weapons",
-        source_url="http://dnd2024.wikidot.com/ranger:main",
     ),
     "Rogue": ClassDefinition(
         name="Rogue",
@@ -151,7 +125,6 @@ CLASS_DEFINITIONS = {
         saving_throw_proficiencies=["DEX", "INT"],
         armor_training="Light armor",
         weapon_proficiencies="Simple weapons and hand crossbows, longswords, rapiers, shortswords",
-        source_url="http://dnd2024.wikidot.com/rogue:main",
     ),
     "Sorcerer": ClassDefinition(
         name="Sorcerer",
@@ -160,7 +133,6 @@ CLASS_DEFINITIONS = {
         saving_throw_proficiencies=["CHA", "CON"],
         armor_training="No armor",
         weapon_proficiencies="Daggers, darts, slings, quarterstaffs, light crossbows",
-        source_url="http://dnd2024.wikidot.com/sorcerer:main",
     ),
     "Warlock": ClassDefinition(
         name="Warlock",
@@ -169,7 +141,6 @@ CLASS_DEFINITIONS = {
         saving_throw_proficiencies=["WIS", "CHA"],
         armor_training="Light armor",
         weapon_proficiencies="Simple weapons",
-        source_url="http://dnd2024.wikidot.com/warlock:main",
     ),
     "Wizard": ClassDefinition(
         name="Wizard",
@@ -178,7 +149,6 @@ CLASS_DEFINITIONS = {
         saving_throw_proficiencies=["INT", "WIS"],
         armor_training="No armor",
         weapon_proficiencies="Daggers, darts, slings, quarterstaffs, light crossbows",
-        source_url="http://dnd2024.wikidot.com/wizard:main",
     ),
 }
 
@@ -207,7 +177,6 @@ def get_all_class_names() -> list:
 # DEFAULT ABILITY SCORES FOR EACH CLASS
 # Standard array [15, 14, 13, 12, 10, 8] distributed by class primary_ability and needs
 DEFAULT_ABILITY_SCORES = {
-    "Artificer": {"INT": 15, "DEX": 14, "CON": 13, "WIS": 12, "STR": 10, "CHA": 8},
     "Barbarian": {"STR": 15, "CON": 14, "WIS": 13, "DEX": 12, "INT": 10, "CHA": 8},
     "Bard": {"CHA": 15, "DEX": 14, "CON": 13, "WIS": 12, "STR": 10, "INT": 8},
     "Cleric": {"WIS": 15, "CON": 14, "STR": 13, "DEX": 12, "INT": 10, "CHA": 8},
@@ -273,8 +242,10 @@ def generate_level_1_stats(class_name: str, ability_scores: Optional[dict] = Non
     dex_mod = get_ability_modifier(ability_scores.get("DEX", 10))
     con_mod = get_ability_modifier(ability_scores.get("CON", 10))
     
-    # HP: Hit die + CON modifier (minimum 1 per level)
-    hp = max(1, definition.hit_die // 2 + 1 + con_mod)
+    # HP: Level 1 = full hit die + CON modifier (SRD 2024)
+    # Barbarian: 12 + Con, Fighter/Paladin/Ranger: 10 + Con
+    # Bard/Cleric/Druid/Monk/Rogue/Warlock: 8 + Con, Sorcerer/Wizard: 6 + Con
+    hp = definition.hit_die + con_mod
     
     # Proficiency bonus at level 1
     proficiency = definition.get_proficiency_bonus(1)
@@ -321,8 +292,6 @@ def generate_level_1_stats(class_name: str, ability_scores: Optional[dict] = Non
 
 def example_barbarian_level_1():
     """Example: Create a Barbarian with default ability scores.
-    
-    From 2024 D&D rules at http://dnd2024.wikidot.com/barbarian:main
     """
     stats = generate_level_1_stats("Barbarian")
     ability_scores = stats["ability_scores"]
@@ -340,7 +309,6 @@ def example_barbarian_level_1():
     print(f"  Attack Bonus: +{stats['attack_bonus']}")
     print(f"  Damage Bonus: +{stats['dmg_bonus']}")
     print(f"  Initiative: +{stats['initiative_bonus']}")
-    print(f"  Source: {definition.source_url}")
 
 
 if __name__ == "__main__":

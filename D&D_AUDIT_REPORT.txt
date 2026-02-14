@@ -1,23 +1,22 @@
 D&D 2024 Core Rules Audit Report
 ==================================
 
-STATUS: ⚠️ CRITICAL - Core mechanics not based on 2024 D&D rules
+STATUS: ✅ RESOLVED - Core mechanics now formula-based and aligned to SRD 5.2.1
 
 FINDINGS
 ========
 
-The game currently uses HARDCODED stat values that DO NOT derive from actual
-2024 D&D mechanics. This means character stats cannot adapt to ability scores
-and don't follow D&D 2024 progression rules.
+This issue has been resolved. All player creation paths now derive stats from
+ability scores using formula-based calculations.
 
 VERIFIED 2024 D&D SOURCE DATA INCLUDED
 ======================================
 
-✅ Hit Dies (from class wikidot pages):
-   - Barbarian: d12 (http://dnd2024.wikidot.com/barbarian:main)
-   - Fighter: d10 (http://dnd2024.wikidot.com/fighter:main)
-   - Rogue: d8 (http://dnd2024.wikidot.com/rogue:main)
-   - Wizard: d6 (http://dnd2024.wikidot.com/wizard:main)
+✅ Hit Dies (from SRD 5.2.1 reference docs):
+   - Barbarian: d12
+   - Fighter: d10
+   - Rogue: d8
+   - Wizard: d6
    - All others: documented and verified
 
 ✅ Proficiency Bonus (2024 D&D Table):
@@ -66,16 +65,16 @@ Created class_definitions.py with:
 
 1. ClassDefinition dataclass
    - Stores verified 2024 D&D hit die for each class
-   - Links to official D&D wiki source
+   - References SRD 5.2.1 docs in this repo
    - Includes methods for calculating stats properly
 
-2. Verified class data from http://dnd2024.wikidot.com/:
+2. Verified class data from SRD 5.2.1 reference docs:
    - All 13 classes with proper hit dies
    - Armor training restrictions
    - Weapon proficiencies
    - Primary ability scores
    - Saving throw proficiencies
-   - Source URLs for each
+   - Source references are local SRD docs
 
 3. Proper calculation methods:
    - calculate_hp(level, con_modifier) → follows 2024 D&D formula
@@ -86,30 +85,9 @@ Created class_definitions.py with:
 NEXT STEPS TO INTEGRATE
 =======================
 
-1. Add ability score system to Character class
-   - Use standard array [15, 14, 13, 12, 10, 8] or point buy
-   - Calculate modifiers: (score - 10) // 2
-   - Store: str, dex, con, int, wis, cha
-
-2. Modify Character initialization
-   - Accept ability scores instead of hardcoded stats
-   - Call class_definitions to get hit die
-   - Calculate HP = hit_die + con_mod
-   - Calculate AC based on armor choice
-   - Calculate attack_bonus = mod + proficiency
-
-3. Update character_creator_gui.py
-   - Show ability scores in character creation
-   - Display calculated stats (not hardcoded)
-   - Let users choose armor type for AC calculation
-
-4. Update monsters.py
-   - Use class_definitions for monster stat generation
-   - Base monster difficulty on level and abilities
-
-5. Add validation
-   - Verify all stats derive from documented 2024 D&D rules
-   - Add comments linking to source wikidot pages
+1. Integrate class features into combat (Phase 2)
+   - Rage, Sneak Attack, Bardic Inspiration, Channel Divinity, etc.
+   - Requires combat loop hooks and feature usage tracking
 
 FILES CREATED
 =============
@@ -120,25 +98,11 @@ FILES CREATED
 TESTING SHOWS
 =============
 
-When compared with standard D&D starting ability scores (STR 15, DEX 14, CON 14):
-
-                     Current Hardcoded    2024 D&D Calculation    Discrepancy
-Barbarian HP:        35 HP               14 HP                   +21 (150% higher!)
-Fighter AC:          17                  12-13                   +4-5 (mismatch)
-Rogue Attack:        +5                  +4                      +1 (wrong formula)
-Wizard HP:           21 HP               8 HP                    +13 (260% higher!)
+Phase 1 verification: all unit tests pass and default creation flows use
+formula-based stats derived from ability scores.
 
 RECOMMENDATION
 ==============
 
-✅ PROCEED with integrating class_definitions.py
-✅ ADD ability score system to Character class  
-✅ REPLACE hardcoded values with formula-based calculations
-✅ CITE 2024 D&D sources for every statistic
-✅ ADD comments showing calculation in game code
-
-This will ensure:
-- Game mechanics align with published 2024 D&D rules
-- Stats can be verified against official sources
-- Character progression makes sense mathematically
-- Different ability scores produce different outcomes
+✅ PROCEED with Phase 2 feature integration
+✅ PLAYTEST after feature hooks land (see ROADMAP.md)

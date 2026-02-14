@@ -1,8 +1,40 @@
 # Development Roadmap & Decision Tree
 
-**Current Version:** 0.5  
-**Date:** 2026-02-09 (Session 3 - EXTENDED: Ability Score System COMPLETE)
-**Status:** Core mechanics blocker RESOLVED ✅ Ready for feature integration
+**Current Version:** 0.5.2  
+**Date:** 2026-02-11 (Updated: Phase 1 complete, formula-based defaults everywhere)
+**Status:** Core mechanics complete ✅ SRD-aligned ✅ Phase 1 complete ✅ Ready for Phase 2 (Feature Integration)
+
+**📘 Long-Term Vision:** See [GAME_DESIGN.md](GAME_DESIGN.md) for comprehensive design document covering calendar system, keep management, NPCs, economy, and advanced features. Current roadmap focuses on Phase 2 (Feature Integration) - long-term features deferred until Phase 3+.
+
+---
+
+## 🔄 How to Resume Work
+
+**When starting a new session:**
+
+1. **Read Session 4 Summary in [CHANGELOG.md](CHANGELOG.md)** - Shows what was completed today
+2. **Reference SRD Docs** - All rules now in local markdown files (8 reference docs)
+3. **Check Current Priority** - Phase 2: Feature Integration (see below)
+4. **Review [GAME_DESIGN.md](GAME_DESIGN.md)** - Long-term vision for context
+5. **Run the game** to verify everything works:
+   ```powershell
+   py -3.11 main_gui.py
+   ```
+
+**Key Files to Know:**
+- **CHANGELOG.md** - Complete session history and current state
+- **ROADMAP.md** - This file, current priorities and next steps
+- **GAME_DESIGN.md** - Long-term vision and design specifications
+- **ARCHITECTURE.md** - Technical architecture and module guide
+- **CLASS_REFERENCE.md** (and 7 other SRD docs) - Rules authority
+
+**Current State Summary:**
+- ✅ SRD 5.2.1 reference system established (8 local docs)
+- ✅ All code aligned with SRD values (monsters, items, healing)
+- ✅ Class features updated to match SRD
+- ✅ Long-term design documented with phase gates
+- ✅ Formula-based stats now used in all player creation paths
+- 🎯 **Next:** Phase 2 - Integrate class features into combat
 
 ---
 
@@ -18,7 +50,7 @@
 **What was done:**
 1. ✅ Added ability score system (STR, DEX, CON, INT, WIS, CHA) to Character
 2. ✅ Implemented `generate_level_1_stats()` function with verified 2024 D&D formulas
-3. ✅ Created DEFAULT_ABILITY_SCORES for all 13 classes
+3. ✅ Created DEFAULT_ABILITY_SCORES for all 12 SRD classes
 4. ✅ Updated character_creator_gui to use formula-based stats instead of CLASS_TEMPLATES
 
 **Validation:**
@@ -49,7 +81,7 @@
 - [x] Pygame GUI framework (Python 3.11)
 - [x] Turn-based combat with pauses
 - [x] GUI Character Creator (3-screen flow)
-- [x] **Base Class Features (32 features across 13 classes)**
+- [x] **Base Class Features (32 features across 12 SRD classes)**
 - [x] **2024 D&D Class Definitions (verified sources)**
 - [x] **Ability Score System (STR, DEX, CON, INT, WIS, CHA)**
 - [x] **Formula-Based Stat Generation (HP, AC, Attack, Initiative)**
@@ -113,10 +145,10 @@
 
 When resuming, read these in order:
 
-1. **D&D_AUDIT_REPORT.txt** - What needs fixing and why
-2. **class_definitions.py** - Verified formulas to use
-3. **character.py** - Where ability scores need to go
-4. **character_creator_gui.py** - Where GUI updates go
+1. **CHANGELOG.md** - Session 5 summary (Phase 1 completion)
+2. **ROADMAP.md** - Current priorities and next steps
+3. **ARCHITECTURE.md** - Combat loop structure
+4. **class_features.py** - Features to integrate in Phase 2
 
 ---
 
@@ -137,13 +169,10 @@ python -m unittest discover tests  # Run tests
 ---
 
 ## How to Resume
-1. Read D&D_AUDIT_REPORT.txt for context
-2. Review class_definitions.py formulas
-3. Start with ability score system in character.py
-4. Update Character.__init__() to use formulas
-5. Update character_creator_gui.py to show scores
-6. Run tests to verify changes
-7. Update ROADMAP/CHANGELOG before clearing chat
+1. Read CHANGELOG.md for Session 5 summary
+2. Run tests to verify baseline behavior
+3. Start Phase 2: integrate class features into combat
+4. Update ROADMAP/CHANGELOG before clearing chat
 
 
 
@@ -435,5 +464,30 @@ def use_ability(self, ability_name, target):
 
 ---
 
-**Last Updated:** 2026-02-08  
-**Next Review:** After trying Path A or B
+## 🔮 Long-Term Development Vision
+
+**See [GAME_DESIGN.md](GAME_DESIGN.md) for full specification.**
+
+The game will eventually evolve from a wave defense prototype into a full kingdom management roguelike with:
+
+**Phase 2 (v0.6-0.8) - CURRENT FOCUS:**
+- Class features integrated into combat
+- Ranged combat system
+- Equipment and status effects
+- Enemy variety expansion
+
+**Phase 3+ (v0.9+) - FUTURE:**
+- Calendar/time system (months, days, raids)
+- Keep building and upgrades
+- Resource management (farming, mining, crafting)
+- Random event system with skill checks
+- NPC recruitment and management
+- Advanced enemy AI and siege mechanics
+- Full economy system
+
+**Current Priority:** Complete Phase 2 before implementing any Phase 3+ features. Each phase must be fully playable and fun before moving to the next.
+
+---
+
+**Last Updated:** 2026-02-10  
+**Next Review:** After Phase 2 feature integration complete

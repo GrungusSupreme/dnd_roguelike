@@ -84,8 +84,42 @@ pip install pygame
 **Character Classes:**
 12 playable classes with presets: Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard
 
-**Character Customization:**
-Ability score point-buy system (27 points, range 8-15, standard D&D 5e costs)
+**Character Creation (D&D 2024 Rules):**
+- **Point Buy System:** 27 points, ability scores 8-15 (standard D&D costs)
+- **16 Backgrounds:** Each provides origin feat, skill proficiencies, and ability score increases
+- **Background ASI:** Choose +2/+1 split or +1/+1/+1 to three suggested abilities
+- **9 Species:** Dragonborn, Dwarf, Elf, Gnome, Goliath, Halfling, Human, Orc, Tiefling
+- **HP Calculation:** Full hit die + CON modifier at level 1 (SRD-compliant)
+
+**Spellcasting (Combat-Focused):**
+- Class-based cantrip/level-1 spell selection at character creation
+- Spell slots tracked and displayed in combat UI
+- AoE spell casting with live cursor preview
+
+**Species Traits (Combat-Relevant):**
+- Dragonborn Breath Weapon + ancestry resistance
+- Tiefling/Elf/Gnome lineage or legacy magic support
+- Gnome mental-save advantage, Halfling Lucky rerolls
+- Orc Relentless Endurance + Adrenaline Rush, Goliath ancestry actions
+
+**Tactical Combat:**
+- **Cover System:** Trees (provide cover, passable) and Rocks (provide cover, block movement/LOS)
+- Both give +2 AC when adjacent
+- Obstacles span entire map with 6-block gap around keep
+
+## Rules References
+
+This project uses the local SRD 5.2.1 reference docs as the only rules source:
+- RULES_REFERENCE.md
+- CLASS_REFERENCE.md
+- SPECIES_REFERENCE.md
+- FEATS_REFERENCE.md
+- EQUIPMENT_REFERENCE.md
+- SPELLS_REFERENCE.md
+- MAGIC_ITEMS_REFERENCE.md
+- MONSTERS_REFERENCE.md
+
+Apply these rules consistently across the project and avoid external sources to reduce copyright risk.
 
 ## Testing
 

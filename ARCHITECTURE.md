@@ -9,7 +9,7 @@
 ## 🎮 Game Core
 
 ### Vision
-A tactical roguelike where you defend an 8×8 keep against waves of enemies on a 64×64 grid, using D&D 5.5e combat rules.
+A tactical roguelike where you defend an 8×8 keep against waves of enemies on a 64×64 grid, using SRD 5.2.1-derived 5.5e combat rules.
 
 ### Two Play Modes
 1. **Terminal (main.py)** - Full turn-by-turn control, colorized output
@@ -71,9 +71,9 @@ heal_ally(target, amount)   # Heal another character
 - Leveling: XP needed = `100 * current_level`
 
 ### class_definitions.py - 2024 D&D Formulas & Class Data
-**Purpose:** Verified class definitions from http://dnd2024.wikidot.com/
+**Purpose:** Verified class definitions from SRD 5.2.1 reference docs.
 
-**Classes:** All 13 classes with hit dies, proficiencies, and calculation formulas
+**Classes:** All 12 SRD classes with hit dies, proficiencies, and calculation formulas
 
 **Key Structures:**
 ```python
@@ -84,7 +84,6 @@ ClassDefinition:
     - saving_throw_proficiencies: list
     - armor_training: str (describes what armor available)
     - weapon_proficiencies: str (Simple, Martial, etc.)
-    - source_url: str (link to 2024 D&D wiki for verification)
   
 DEFAULT_ABILITY_SCORES:
     - One entry per class with standard array [15, 14, 13, 12, 10, 8]
@@ -123,7 +122,7 @@ spawn_wave(wave_num)  # Returns list of enemies scaled by wave difficulty
 - Enemy Count: 2 + wave number (e.g., Wave 1 = 3 enemies)
 
 ### creator.py - Character Creation
-**Classes:** 13 presets (Artificer, Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard)
+**Classes:** 12 presets (Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard)
 
 **Point Buy System:**
 - 27 points to distribute
@@ -249,6 +248,11 @@ main_gui.py
 - `selected_target` - Current focus
 - `message` - UI message
 - `message_timer` - Frames left to display
+- `trees` - Set of (x, y) tree positions (cover only, passable)
+- `rocks` - Set of (x, y) rock positions (cover + blocking)
+- `actions_remaining` - Player actions left this turn
+- `movement_used` - Movement spent this turn
+- `movement_max` - Maximum movement per turn
 
 ### Game Window: `GameWindow`
 **Rendering Methods:**
@@ -473,10 +477,59 @@ python main_gui.py --seed 42
 | README.md | User guide, how to play |
 | CHANGELOG.md | Project state, features, architecture |
 | ARCHITECTURE.md | This file - complete design overview |
-| IMPLEMENTATION_SUMMARY.md | Technical summary of what's built |
-| GUI_NOTES.md | Pygame-specific development notes |
-| QUICKSTART.md | Quick reference for running game |
+| GAME_DESIGN.md | Long-term vision and design specification |
+| ROADMAP.md | Phased development plan and priorities |
 | GIT_COMMIT_GUIDE.txt | How to commit changes |
+
+---
+
+## 🔮 Future Architectural Considerations
+
+**See [GAME_DESIGN.md](GAME_DESIGN.md) for full long-term vision.**
+
+The current architecture (v0.5) supports wave-based tactical combat. Future phases will require these structural additions:
+
+**Phase 3: Calendar & Time System**
+- New module: `calendar.py` - Day/month tracking, raid scheduling
+- Extended `character.py` - Exhaustion tracking, rest state management
+- New module: `rest_system.py` - Long/short rest logic
+
+**Phase 4: Event System**
+- New module: `events.py` - Random event framework and event pool
+- New module: `skill_checks.py` - Skill check resolution with DC system
+- Event data: `events/` directory with JSON or Python event definitions
+
+**Phase 5: Keep & Territory**
+- New module: `keep.py` - Keep structure, upgrades, storage
+- New module: `territory.py` - Tile management, resource production
+- New module: `builder.py` - Construction system and costs
+
+**Phase 6: Economy & Crafting**
+- New module: `economy.py` - Gold, scrap, food tracking
+- New module: `crafting.py` - Recipe system, tool proficiency checks
+- Extended `items.py` - Expanded item types and crafting recipes
+
+**Phase 7: NPC System**
+- New module: `npcs.py` - NPC classes, specialists, management
+- New module: `recruitment.py` - Hiring and event-based recruitment
+- Extended `combat.py` - Limited NPC combat participation
+
+**Phase 8: Advanced Enemy AI**
+- Extended `monsters.py` - Siege behavior, escalation logic
+- New module: `siege.py` - Siege equipment mechanics
+- Extended map system - Tree line staging area
+
+**Data Structure Considerations:**
+- Save/load system will need comprehensive serialization
+- Event system requires content pipeline (JSON/YAML recommended)
+- NPC system may benefit from inheritance hierarchy
+- Resource management needs efficient storage (dict-based inventories)
+
+**Grid System:**
+- Current and Future: Traditional 5e grid (characters occupy squares)
+- Diagonal movement: Simplified rule (all diagonals = 5 ft) for ease of play
+- Alternative variant: 5/10/5 diagonal rule (first diagonal 5 ft, second 10 ft)
+- Standard D&D 5e cover and line-of-sight rules apply
 
 ---
 
@@ -484,10 +537,12 @@ python main_gui.py --seed 42
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-10 | 0.5 | Ability scores, SRD alignment, long-term vision documented |
 | 2026-02-08 | 0.2 | Pygame GUI + Enhanced UI |
 | Previous | 0.1 | Base game + tests |
 
 ---
 
-**Last Updated:** 2026-02-08  
-**Maintainer Notes:** This project is well-structured and tested. New developers should be able to pick it up by reading CHANGELOG.md and running tests.
+**Last Updated:** 2026-02-10  
+**Maintainer Notes:** This project is well-structured and tested. New developers should read CHANGELOG.md, ARCHITECTURE.md, and GAME_DESIGN.md for full context. Current focus: Phase 2 feature integration.
+

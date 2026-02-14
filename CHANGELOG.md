@@ -1,9 +1,274 @@
 # dnd_roguelike — Changelog & Project State
 
-**Last Updated:** 2026-02-09 (Session 3 - Extended)  
-**Version:** 0.5 (Ability Score System + Formula-Based Stats)
+**Last Updated:** 2026-02-14 (Session 7 - Spellcasting + Species Trait Completion)  
+**Version:** 0.6.0 (Combat Spellcasting + Expanded Species Mechanics)
 
 This file documents the complete project state for reference when clearing chat history.
+
+---
+
+## 📋 Session 7 - Spellcasting + Species Trait Completion
+
+### ✅ COMPLETED THIS SESSION
+
+#### **Step 1: Combat Spellcasting Framework**
+- Added centralized spell metadata and slot tables in `spell_data.py`.
+- Added level-1 caster spell selection requirements and options by class.
+- Added runtime spell slot tracking, slot display, and spell casting APIs in `character.py`.
+- Added spell actions to GUI with submenu behavior to reduce action bar clutter.
+
+#### **Step 2: Spell Combat Effects + AoE Preview**
+- Implemented combat effects for cantrips and level-1 combat spells.
+- Added AoE spell casting path and per-spell AoE shape metadata support.
+- Added live cursor-based AoE preview in GUI with valid/invalid coloring.
+- Fixed spell attack resolution to use spellcasting modifier + proficiency.
+
+#### **Step 3: Species Trait Mechanics Expansion**
+- Expanded species passives and actives in `character.py`:
+  - Dragonborn resistance + Breath Weapon usage scaling.
+  - Tiefling fire resistance and lineage magic support.
+  - Gnome mental save advantage support (Gnomish Cunning).
+  - Halfling Lucky d20 reroll behavior.
+  - Orc Relentless Endurance + Adrenaline Rush resource.
+  - Goliath ancestry resource tracking and large-form activation hooks.
+  - Dwarf resilience/toughness/stonecunning resource scaffolding.
+- Added species bonus-action UI actions in combat (`gui.py`/`main_gui.py`).
+
+#### **Step 4: Character Creation + Preset Integration**
+- Added spell selection flow to character creation for spellcasters.
+- Persisted selected spells/slots to presets and restored them on load.
+- Added species bonus-selection UI scaffolding for Human/Elf bonus choices.
+
+#### **Step 5: Test Coverage**
+- Added `tests/test_spells.py` and expanded `tests/test_species_traits.py`.
+- Added checks for slot usage, healing/cantrip behavior, Fire Bolt regression, AoE casting, and key species mechanics.
+
+### 📊 Current Project State
+
+**Game Status:** Wave defense prototype (v0.6.0) with combat spellcasting and expanded species trait handling  
+**Spellcasting:** Character creation + combat casting + slot tracking integrated  
+**Species Traits:** Core combat-relevant traits broadly implemented with automated tests  
+
+---
+
+## 📋 Session 6 - Background ASI & Combat Improvements
+
+### ✅ COMPLETED THIS SESSION
+
+#### **Step 1: Fixed Level 1 HP Calculation (SRD-Compliant)**
+- **class_definitions.py UPDATED**
+  - HP formula corrected: `hit_die + CON modifier` (was using leveling-up formula)
+  - Now matches SRD 2024 exactly:
+    - Barbarian: 12 + Con, Fighter/Paladin/Ranger: 10 + Con
+    - Bard/Cleric/Druid/Monk/Rogue/Warlock: 8 + Con
+    - Sorcerer/Wizard: 6 + Con
+  - All tests still pass ✅
+
+#### **Step 2: Background Ability Score Increases (D&D 2024)**
+- **character_creation_data.py UPDATED**
+  - Added `BACKGROUND_ABILITY_SCORES` mapping all 16 backgrounds to 3 suggested abilities
+  - Used paraphrased PHB 2024 data for ability score suggestions
+- **character_creator_gui.py UPDATED**
+  - New screen: "Background ASI" between background and species selection
+  - Players choose: **+2/+1 split** OR **+1/+1/+1 to all three** suggested abilities
+  - Interactive button selection with visual feedback
+  - Applied after point buy, capped at 20
+- **Flow:** Class → Name → Point Buy → Background → **Background ASI** → Species → Skills → Feat → Review
+
+#### **Step 3: Removed Non-SRD Backgrounds**
+- **Removed Folk Hero and Urchin** (2014 PHB only, not in 2024 SRD)
+- Final count: **16 backgrounds** (Acolyte, Artisan, Charlatan, Criminal, Entertainer, Farmer, Guard, Guide, Hermit, Merchant, Noble, Sage, Sailor, Scribe, Soldier, Wayfarer)
+- Cleaned from: `character_creation_data.py`, `GAME_DESIGN.md`
+
+#### **Step 4: Two-Tier Obstacle System**
+- **main_gui.py & gui.py UPDATED**
+  - **Trees (70%):** Provide cover but DON'T block movement or line of sight
+    - Color: Dark green `(40, 90, 40)`
+    - Enemies can path through for better navigation
+  - **Rocks (30%):** Provide cover AND block movement + line of sight
+    - Color: Gray `(80, 80, 70)`
+    - Enemies path around these
+  - Both provide +2 AC cover bonus when adjacent
+  - Cover spans entire 64×64 map with 6-block gap around keep (up from 2-block)
+- **Result:** Dramatically improved enemy pathfinding while maintaining tactical cover
+
+### 📊 Current Project State
+
+**Game Status:** Wave defense prototype (v0.5.3) with full D&D 2024 character creation
+**Phase 1:** Complete ✅ (formula-based stats + background ASI integrated)
+**Combat System:** Functional with cover mechanics and improved obstacle pathfinding
+**All 15 Tests:** Passing ✅
+
+---
+
+## 📋 Session 5 - Phase 1 Completion
+
+### ✅ COMPLETED THIS SESSION
+
+#### **Step 1: Formula-Based Defaults Everywhere**
+- **creator.py UPDATED**
+  - Terminal character creation now uses `generate_level_1_stats()` and ability scores
+  - Point-buy feeds directly into formula-based stat generation
+- **main.py UPDATED**
+  - Default player now uses `generate_level_1_stats()`
+  - Potion use/drop now uses SRD-aligned defaults (`create_potion_of_healing()`)
+- **main_gui.py UPDATED**
+  - Quick-start hero now uses `generate_level_1_stats()`
+- **character_creator_gui.py UPDATED**
+  - GUI creator fallback hero now uses `generate_level_1_stats()`
+
+#### **Step 2: Phase 1 Validation**
+- ✅ All 15 unit tests passing
+- ✅ No remaining hardcoded player presets in default flows
+- ✅ Terminal + GUI creation paths both formula-based
+
+### 📊 Current Project State
+
+**Game Status:** Wave defense prototype (v0.5) with SRD-aligned, formula-based stats
+**Phase 1:** Complete ✅ (formula-based stats integrated across all creation paths)
+**Next Priority:** Phase 2 - Feature Integration (class features in combat)
+
+---
+
+## 📋 Session 4 - SRD Reference System & Long-Term Design Vision
+
+### ✅ COMPLETED THIS SESSION
+
+#### **Step 1: SRD 5.2.1 PDF Conversion**
+- **Converted SRD_CC_v5.2.1.pdf to Markdown**
+  - Used pdfplumber library for text extraction
+  - Split 343-page PDF into 8 organized reference documents:
+    - RULES_REFERENCE.md (core mechanics, combat, conditions)
+    - CLASS_REFERENCE.md (all 13 classes with features)
+    - SPECIES_REFERENCE.md (playable species/races)
+    - FEATS_REFERENCE.md (all feats and origin feats)
+    - EQUIPMENT_REFERENCE.md (weapons, armor, adventuring gear)
+    - SPELLS_REFERENCE.md (complete spell list)
+    - MAGIC_ITEMS_REFERENCE.md (magic item catalog)
+    - MONSTERS_REFERENCE.md (creature stat blocks)
+  - All docs properly attributed with CC BY 4.0 license
+  - Deleted original PDF (redundant after extraction)
+
+#### **Step 2: Removed External References**
+- **Eliminated all wikidot URLs** from codebase
+- **Deleted D&D_2024_REFERENCE.md** (obsolete external links)
+- **Updated all documentation** to reference local SRD docs only
+- **Files modified:**
+  - class_definitions.py (removed source_url field)
+  - DOCUMENTATION_STANDARDS.md (mandate SRD-only usage)
+  - README.md (updated reference section)
+  - ARCHITECTURE.md (SRD references)
+  - D&D_AUDIT_REPORT.txt (SRD references)
+
+#### **Step 3: Code Alignment with SRD Values**
+- **monsters.py UPDATED**
+  - Goblin variants now match official SRD stat blocks:
+    - Goblin Minion: AC 12, HP 7 (was generic scaling)
+    - Goblin Warrior: AC 15, HP 10 
+    - Goblin Boss: AC 17, HP 21
+  - Added proper SRD attributes (STR 8, DEX 14, CON 10, etc.)
+  
+- **items.py UPDATED**
+  - Added `create_potion_of_healing()` function
+  - SRD values: 2d4+2 HP (7 average), 50 GP cost
+  
+- **character.py UPDATED**
+  - `use_potion()` now defaults to amount=7 (SRD average)
+  - `heal_ally()` now defaults to amount=7 (SRD average)
+
+#### **Step 4: Class Features Aligned with SRD**
+- **class_features.py UPDATED** (9 features corrected)
+  - Barbarian Rage: Added full SRD details (B/P/S resistance, +2 damage, Advantage on STR, 10 rounds)
+  - Barbarian Unarmored Defense: Added AC formula (10 + DEX + CON, shield allowed)
+  - Bard Bardic Inspiration: Fixed to Bonus Action, CHA mod uses, 1-hour duration
+  - Cleric Channel Divinity: Clarified multiple effects (Turn Undead, healing, etc.)
+  - Cleric: Replaced incorrect "Healing Light" with correct "Divine Order" feature
+  - Fighter Second Wind: Corrected max_uses to 2 (1 on Short Rest, all on Long Rest)
+  - Rogue Sneak Attack: Updated recharge to "unlimited", clarified conditions
+  - Rogue Expertise: Standardized description (4 skills at level 9)
+  - Wizard Arcane Recovery: Clarified as Short Rest feature with proper formula
+
+#### **Step 5: Cleaned Up Redundant Documentation**
+- **Deleted 5 redundant files:**
+  - output.md (raw PDF extraction)
+  - pdf_to_md.py (conversion script, no longer needed)
+  - IMPLEMENTATION_SUMMARY.md (outdated summary)
+  - QUICKSTART.md (redundant with README)
+  - GUI_NOTES.md (merged into other docs)
+
+#### **Step 6: Long-Term Design Documentation**
+- **Created GAME_DESIGN.md** (600+ lines)
+  - Complete vision for kingdom management roguelike
+  - 9 development phases (current: Phase 2)
+  - Systems designed:
+    - Calendar & time management (months, days, raids)
+    - Keep building and territory management
+    - Resource economy (gold, scrap tiers, food, production)
+    - NPC recruitment and management
+    - Random event system with skill checks
+    - Advanced enemy AI and siege mechanics
+  - **Mandatory between-phase playtesting checklist**
+  - All design concerns addressed with resolutions
+
+- **Design Decisions Finalized:**
+  - ✅ Standard 5e grid system (not grid line movement)
+  - ✅ Siege escalation with specific turn counts (warning Round 7, siege Round 10)
+  - ✅ Monthly food budget (not daily tracking)
+  - ✅ Backgrounds balanced at 15-20% bonuses
+  - ✅ 30 foundation events for Phase 4
+  - ✅ Lenient exhaustion thresholds (4-5 raid days)
+  - ✅ Strict phase discipline with playtesting gates
+
+- **Updated ROADMAP.md**
+  - Added reference to GAME_DESIGN.md
+  - Emphasized Phase 2 focus before long-term features
+  - Added long-term vision summary
+
+- **Updated ARCHITECTURE.md**
+  - Added future architectural considerations
+  - Documented grid system decision
+  - Listed required modules for future phases
+
+### 📊 Current Project State
+
+**Game Status:** Wave defense prototype (v0.5) with SRD-aligned features  
+**Code Alignment:** All monster/item/healing stats match SRD 5.2.1  
+**Reference System:** 8 local SRD docs, all external refs removed  
+**Documentation:** Complete design vision with phased roadmap  
+**Next Priority:** Phase 2 - Feature Integration (class features in combat)
+
+**Files Added This Session:**
+- RULES_REFERENCE.md
+- CLASS_REFERENCE.md
+- SPECIES_REFERENCE.md
+- FEATS_REFERENCE.md
+- EQUIPMENT_REFERENCE.md
+- SPELLS_REFERENCE.md
+- MAGIC_ITEMS_REFERENCE.md
+- MONSTERS_REFERENCE.md
+- GAME_DESIGN.md
+
+**Files Modified This Session:**
+- monsters.py (SRD goblin stat blocks)
+- items.py (SRD potion values)
+- character.py (SRD healing defaults)
+- class_features.py (9 features aligned with SRD)
+- class_definitions.py (removed wikidot references)
+- ROADMAP.md (long-term vision link)
+- ARCHITECTURE.md (future systems, grid decision)
+- DOCUMENTATION_STANDARDS.md (SRD mandate)
+- README.md (updated references)
+- D&D_AUDIT_REPORT.txt (SRD references)
+- CHANGELOG.md (this file)
+
+**Files Deleted This Session:**
+- SRD_CC_v5.2.1.pdf
+- output.md
+- pdf_to_md.py
+- D&D_2024_REFERENCE.md
+- IMPLEMENTATION_SUMMARY.md
+- QUICKSTART.md
+- GUI_NOTES.md
 
 ---
 
@@ -135,7 +400,7 @@ Integration capability unlocked. Features like Rage can now:
   - Damage Bonus: hardcoded, should be ability modifier
 
 - **class_definitions.py** - VERIFIED 2024 D&D source data
-  - All 13 classes with hit dies from http://dnd2024.wikidot.com/
+  - All 13 classes with hit dies from SRD 5.2.1 reference docs
   - Source URLs for verification
   - ClassDefinition with calculation methods (properly formula-based)
   - Example: `calculate_hp(level, con_mod)` uses d12 + con_mod
@@ -253,7 +518,7 @@ When resuming work:
 4. ✅ Update Character.__init__() to use formulas instead of hardcoded values
 5. ✅ Test with unit tests
 6. ✅ Update GUI to show ability scores and calculated stats
-7. ✅ Reference http://dnd2024.wikidot.com/ for any questions
+7. ✅ Reference SRD 5.2.1 docs in this repo for any questions
 
 All groundwork is complete - ready for implementation phase!
 

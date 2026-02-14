@@ -1,7 +1,9 @@
-"""Class features system based on D&D 2024 rules.
+"""Class features system based on D&D 2024 SRD 5.2.1 rules.
 
 Each class has unique abilities and features that affect gameplay.
 This module defines the base features for each class.
+
+Feature details sourced from CLASS_REFERENCE.md.
 """
 
 
@@ -57,31 +59,29 @@ class ClassFeature:
 
 # Class feature definitions
 CLASS_FEATURES = {
-    "Artificer": [
-        ClassFeature(
-            name="Tinker's Magic",
-            description="Cast spells using INT modifier. Can mend objects or create magical effects.",
-            max_uses=2,
-            recharge="rest",
-            effect_type="action",
-        ),
-    ],
     "Barbarian": [
         ClassFeature(
             name="Rage",
-            description="Enter a state of fury for 1 minute. Gain resistance to physical damage and +2 damage to melee attacks.",
+            description="Enter a fury as Bonus Action. Gain resistance to Bludgeoning/Piercing/Slashing damage, bonus damage on Strength attacks (+2 at level 1), Advantage on STR checks/saves. Can't cast spells or concentrate. Lasts 10 rounds if maintained.",
             max_uses=2,
             recharge="rest",
             effect_type="bonus_action",
+        ),
+        ClassFeature(
+            name="Unarmored Defense",
+            description="AC = 10 + DEX + CON when not wearing armor. Can use a shield.",
+            max_uses=None,
+            recharge="passive",
+            effect_type="passive",
         ),
     ],
     "Bard": [
         ClassFeature(
             name="Bardic Inspiration",
-            description="Grant an ally a d6 bonus to their next attack, ability check, or saving throw.",
-            max_uses=3,
+            description="Bonus Action to give ally within 60 ft a d6 die. Within 1 hour, ally can add d6 to failed D20 Test. Uses equal to CHA modifier (min 1), recharge on Long Rest.",
+            max_uses=3,  # Should be CHA modifier (min 1)
             recharge="rest",
-            effect_type="action",
+            effect_type="bonus_action",
         ),
         ClassFeature(
             name="Expertise",
@@ -94,17 +94,17 @@ CLASS_FEATURES = {
     "Cleric": [
         ClassFeature(
             name="Channel Divinity",
-            description="Use divine power to turn undead or heal. 2 uses per long rest.",
+            description="Use divine power for various effects (Turn Undead, heal, etc). 2 uses per Long Rest at level 1.",
             max_uses=2,
             recharge="rest",
             effect_type="action",
         ),
         ClassFeature(
-            name="Healing Light",
-            description="Bonus action to heal an ally for 1d4 + WIS modifier.",
-            max_uses=3,
-            recharge="rest",
-            effect_type="bonus_action",
+            name="Divine Order",
+            description="Choose Protector (Heavy armor, Martial weapons) or Thaumaturge (Wisdom cantrip). Defines cleric focus.",
+            max_uses=None,
+            recharge="passive",
+            effect_type="passive",
         ),
     ],
     "Druid": [
@@ -133,8 +133,8 @@ CLASS_FEATURES = {
         ),
         ClassFeature(
             name="Second Wind",
-            description="Bonus action to heal yourself for 1d10 + Fighter level.",
-            max_uses=1,
+            description="Bonus action to heal yourself for 1d10 + Fighter level. Regain 1 use on Short Rest, all on Long Rest.",
+            max_uses=2,
             recharge="rest",
             effect_type="bonus_action",
         ),
@@ -218,9 +218,9 @@ CLASS_FEATURES = {
     "Rogue": [
         ClassFeature(
             name="Sneak Attack",
-            description="Deal an extra 1d6 damage (scales to 10d6) when using a finesse weapon and advantageous position.",
+            description="Deal extra 1d6 damage (scales with level) once per turn when you have Advantage on attack with Finesse/Ranged weapon, or when ally is within 5 ft of target.",
             max_uses=None,
-            recharge="passive",
+            recharge="unlimited",
             effect_type="passive",
         ),
         ClassFeature(
@@ -232,7 +232,7 @@ CLASS_FEATURES = {
         ),
         ClassFeature(
             name="Expertise",
-            description="Double proficiency bonus on 2 chosen skills. Increases at level 6, 9, etc.",
+            description="Double proficiency bonus on 2 chosen skills. Increases to 4 skills at level 9.",
             max_uses=None,
             recharge="passive",
             effect_type="passive",
@@ -294,7 +294,7 @@ CLASS_FEATURES = {
         ),
         ClassFeature(
             name="Arcane Recovery",
-            description="Recover spell slots totaling up to half your Wizard level on a short rest.",
+            description="Once per day during a Short Rest, recover spell slots with combined level up to half your Wizard level (rounded up).",
             max_uses=1,
             recharge="rest",
             effect_type="action",
