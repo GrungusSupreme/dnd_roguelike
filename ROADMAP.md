@@ -1,10 +1,10 @@
 # Development Roadmap & Decision Tree
 
-**Current Version:** 0.5.2  
-**Date:** 2026-02-11 (Updated: Phase 1 complete, formula-based defaults everywhere)
-**Status:** Core mechanics complete ✅ SRD-aligned ✅ Phase 1 complete ✅ Ready for Phase 2 (Feature Integration)
+**Current Version:** 0.8.0  
+**Date:** 2026-02-14 (Updated: Phase 2 complete)
+**Status:** Core mechanics complete ✅ SRD-aligned ✅ Phase 1 complete ✅ Phase 2 complete ✅ Ready for Phase 3 planning
 
-**📘 Long-Term Vision:** See [GAME_DESIGN.md](GAME_DESIGN.md) for comprehensive design document covering calendar system, keep management, NPCs, economy, and advanced features. Current roadmap focuses on Phase 2 (Feature Integration) - long-term features deferred until Phase 3+.
+**📘 Long-Term Vision:** See [GAME_DESIGN.md](GAME_DESIGN.md) for comprehensive design document covering calendar system, keep management, NPCs, economy, and advanced features. Phase 2 is complete; roadmap now transitions to Phase 3 planning and implementation gates.
 
 ---
 
@@ -14,7 +14,7 @@
 
 1. **Read Session 4 Summary in [CHANGELOG.md](CHANGELOG.md)** - Shows what was completed today
 2. **Reference SRD Docs** - All rules now in local markdown files (8 reference docs)
-3. **Check Current Priority** - Phase 2: Feature Integration (see below)
+3. **Check Current Priority** - Phase 3 planning and milestone scoping (see below)
 4. **Review [GAME_DESIGN.md](GAME_DESIGN.md)** - Long-term vision for context
 5. **Run the game** to verify everything works:
    ```powershell
@@ -34,7 +34,7 @@
 - ✅ Class features updated to match SRD
 - ✅ Long-term design documented with phase gates
 - ✅ Formula-based stats now used in all player creation paths
-- 🎯 **Next:** Phase 2 - Integrate class features into combat
+- 🎯 **Next:** Phase 3 - Keep systems, events, and economy scaffolding
 
 ---
 
@@ -470,7 +470,7 @@ def use_ability(self, ability_name, target):
 
 The game will eventually evolve from a wave defense prototype into a full kingdom management roguelike with:
 
-**Phase 2 (v0.6-0.8) - CURRENT FOCUS:**
+**Phase 2 (v0.6-0.8) - COMPLETED:**
 - Class features integrated into combat
 - Ranged combat system
 - Equipment and status effects
@@ -485,9 +485,9 @@ The game will eventually evolve from a wave defense prototype into a full kingdo
 - Advanced enemy AI and siege mechanics
 - Full economy system
 
-**Current Priority:** Complete Phase 2 before implementing any Phase 3+ features. Each phase must be fully playable and fun before moving to the next.
+**Current Priority:** Begin Phase 3 in controlled slices with playability gates. Each phase must remain fully playable and fun before moving to the next.
 
 ---
 
-**Last Updated:** 2026-02-10  
-**Next Review:** After Phase 2 feature integration complete
+**Last Updated:** 2026-02-14  
+**Next Review:** After Phase 3 slice 2 (one random event type + one keep upgrade path) is playable

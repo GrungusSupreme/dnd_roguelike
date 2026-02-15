@@ -106,6 +106,7 @@ class Character:
         self.breath_weapon_uses_max = 0
         self.breath_weapon_uses_remaining = 0
         self.species_magic = None
+        self.status_effects = {}
         self._initialize_species_features()
         
         # Equipment slots
@@ -203,6 +204,50 @@ class Character:
             roll = dice.roll_die()
         return roll
 
+    def apply_status_effect(self, name: str, rounds: int, potency: int = 0) -> None:
+        """Apply or refresh a status effect for a number of rounds."""
+        key = (name or "").strip().lower()
+        if not key or rounds <= 0:
+            return
+        current = self.status_effects.get(key, {"rounds": 0, "potency": 0})
+        self.status_effects[key] = {
+            "rounds": max(int(rounds), int(current.get("rounds", 0))),
+            "potency": max(int(potency), int(current.get("potency", 0))),
+        }
+
+    def has_status_effect(self, name: str) -> bool:
+        key = (name or "").strip().lower()
+        return key in self.status_effects and self.status_effects[key].get("rounds", 0) > 0
+
+    def get_status_summary(self) -> str:
+        if not self.status_effects:
+            return ""
+        active = []
+        for name, data in sorted(self.status_effects.items()):
+            rounds = int(data.get("rounds", 0))
+            if rounds > 0:
+                active.append(f"{name.title()}({rounds})")
+        return ", ".join(active)
+
+    def get_attack_roll_penalty(self) -> int:
+        penalty = 0
+        if self.has_status_effect("poisoned"):
+            penalty += 2
+        return penalty
+
+    def tick_status_effects(self) -> list[str]:
+        expired = []
+        for effect_name in list(self.status_effects.keys()):
+            data = self.status_effects[effect_name]
+            rounds = int(data.get("rounds", 0)) - 1
+            if rounds <= 0:
+                expired.append(effect_name)
+                del self.status_effects[effect_name]
+            else:
+                data["rounds"] = rounds
+                self.status_effects[effect_name] = data
+        return expired
+
     def has_save_advantage(self, ability: str, effect_tag: str = "") -> bool:
         ability_key = (ability or "").strip().upper()
         effect_key = (effect_tag or "").strip().lower()
@@ -260,7 +305,7 @@ class Character:
         damage_tuple = spell.get("damage", (1, 6))
         damage_type = spell.get("damage_type", "force")
         roll = self.roll_d20()
-        spell_attack_bonus = self.get_spellcasting_modifier() + self.get_proficiency_bonus()
+        spell_attack_bonus = self.get_spellcasting_modifier() + self.get_proficiency_bonus() - self.get_attack_roll_penalty()
         target_ac = enemy.get_ac() if hasattr(enemy, "get_ac") else enemy.ac
         target_ac += getattr(enemy, "temp_ac_bonus", 0)
 
@@ -405,8 +450,14 @@ class Character:
                 
                 return ac + self.temp_ac_bonus
         
-        # No armor: 10 + DEX
-        return 10 + self.get_dex_modifier() + self.temp_ac_bonus
+        # No armor: base 10 + DEX, with class-specific Unarmored Defense
+        dex_mod = self.get_dex_modifier()
+        class_key = (self.class_name or "").strip().lower()
+        if class_key == "barbarian":
+            return 10 + dex_mod + self.get_ability_modifier("CON") + self.temp_ac_bonus
+        if class_key == "monk":
+            return 10 + dex_mod + self.get_ability_modifier("WIS") + self.temp_ac_bonus
+        return 10 + dex_mod + self.temp_ac_bonus
 
     def get_damage_dice(self) -> tuple[int, int]:
         """Return (dmg_num, dmg_die) from equipped weapon."""
@@ -448,7 +499,9 @@ class Character:
         if self.inspiration_die > 0:
             inspiration_bonus = dice.roll_dice(1, self.inspiration_die)
             self.inspiration_die = 0
-        total = roll + self.attack_bonus + inspiration_bonus
+        attack_penalty = self.get_attack_roll_penalty()
+        effective_attack_bonus = self.attack_bonus - attack_penalty
+        total = roll + effective_attack_bonus + inspiration_bonus
         # Use dynamic AC calculation for target
         target_ac = target.get_ac() if hasattr(target, 'get_ac') else target.ac
         target_ac += getattr(target, "temp_ac_bonus", 0)
@@ -491,10 +544,10 @@ class Character:
                 notes = " (" + ", ".join(extra_notes) + ")"
             if resisted:
                 notes = f"{notes} (resisted)" if notes else " (resisted)"
-            msg = f"{self.name} rolls {roll}+{self.attack_bonus} = {total} vs AC {target_ac} -> HIT for {dmg} dmg{notes} (target HP {target_hp})"
+            msg = f"{self.name} rolls {roll}+{effective_attack_bonus} = {total} vs AC {target_ac} -> HIT for {dmg} dmg{notes} (target HP {target_hp})"
         else:
             target_ac = target.get_ac() if hasattr(target, 'get_ac') else target.ac
-            msg = f"{self.name} rolls {roll}+{self.attack_bonus} = {total} vs AC {target_ac} -> MISS"
+            msg = f"{self.name} rolls {roll}+{effective_attack_bonus} = {total} vs AC {target_ac} -> MISS"
         if log_fn:
             log_fn(msg)
         else:
@@ -683,7 +736,7 @@ class Character:
             return msg
 
         roll = self.roll_d20()
-        total = roll + self.attack_bonus
+        total = roll + self.attack_bonus - self.get_attack_roll_penalty()
         target_ac = target.get_ac() if hasattr(target, "get_ac") else target.ac
         target_ac += getattr(target, "temp_ac_bonus", 0)
         hit = (roll == 20) or (total >= target_ac)
@@ -949,6 +1002,9 @@ class Character:
             self.tremorsense_rounds_remaining -= 1
             if self.tremorsense_rounds_remaining <= 0:
                 self.tremorsense_range = 0
+        expired = self.tick_status_effects()
+        for effect_name in expired:
+            messages.append(f"{self.name} is no longer {effect_name}.")
         return messages
 
     def roll_initiative(self):

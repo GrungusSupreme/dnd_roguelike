@@ -17,14 +17,25 @@ def spawn_wave(wave_number: int, count: int = None):
         count = wave_number + 1
 
     enemies = []
-    base_hp = 6
-    base_ac = 13
-    base_attack = 4
-    base_dmg_num = 1
-    base_dmg_die = 6
+
+    if wave_number == 1:
+        archetypes = ["goblin_warrior", "goblin_archer", "goblin_boss"]
+    elif wave_number == 2:
+        archetypes = ["goblin_warrior", "goblin_archer", "orc", "skeleton"]
+    else:
+        archetypes = [
+            "goblin_warrior",
+            "goblin_archer",
+            "orc",
+            "skeleton",
+            "mage",
+            "troll",
+            "goblin_boss",
+        ]
 
     for i in range(count):
         bounty = 2 + wave_number
-        enemies.append(monsters.make_enemy(wave_number, i, bounty=bounty))
+        archetype = archetypes[i % len(archetypes)]
+        enemies.append(monsters.make_enemy(wave_number, i, bounty=bounty, archetype=archetype))
 
     return enemies

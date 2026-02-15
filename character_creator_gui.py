@@ -112,6 +112,7 @@ class CharacterCreatorGUI:
         self.spell_choice_requirements = {"cantrips": 0, "spells": 0, "ability": "INT"}
         self.spell_buttons = {}
         self.spell_continue_button = Button(600, 520, 140, 40, "Continue")
+        self.species_bonus_skill_title_y = 390
         # Equipment selection
         self.equipment_budget = 100  # Starting gold
         self.equipment_spent = 0
@@ -143,7 +144,7 @@ class CharacterCreatorGUI:
         self.skill_buttons = {}
         self.skill_continue_button = Button(600, 520, 140, 40, "Continue")
         self.tool_buttons = {}
-        self.tool_continue_button = Button(600, 70, 140, 40, "Continue")
+        self.tool_continue_button = Button(600, 520, 140, 40, "Continue")
         self.species_bonus_feat_buttons = {}
         self.species_bonus_skill_buttons = {}
         self.species_bonus_continue_button = Button(600, 520, 140, 40, "Continue")
@@ -288,11 +289,12 @@ class CharacterCreatorGUI:
         if skill_pool:
             cols = 3
             btn_width = 220
-            btn_height = 34
+            btn_height = 30
             start_x = 40
-            start_y = 430 if need_human_feat else 200
+            start_y = 300 if need_human_feat else 200
             spacing_x = 245
-            spacing_y = 42
+            spacing_y = 34
+            self.species_bonus_skill_title_y = start_y - 36
             for i, skill in enumerate(skill_pool):
                 row = i // cols
                 col = i % cols
@@ -418,11 +420,11 @@ class CharacterCreatorGUI:
         self.tool_buttons = {}
         cols = 3
         btn_width = 230
-        btn_height = 32
+        btn_height = 24
         start_x = 40
         start_y = 120
         spacing_x = 250
-        spacing_y = 44
+        spacing_y = 30
         for i, tool in enumerate(TOOL_PROFICIENCY_OPTIONS):
             row = i // cols
             col = i % cols
@@ -1057,7 +1059,7 @@ class CharacterCreatorGUI:
                 btn.draw(self.screen, self.font_small)
 
             skill_title = self.font_medium.render("Human Skillful: choose one extra skill proficiency", True, COLOR_TEXT_SELECTED)
-            self.screen.blit(skill_title, (40, 390))
+            self.screen.blit(skill_title, (40, self.species_bonus_skill_title_y))
             for btn in self.species_bonus_skill_buttons.values():
                 btn.draw(self.screen, self.font_small)
         elif self.selected_species == "Elf":
@@ -1068,7 +1070,7 @@ class CharacterCreatorGUI:
 
         if not self._species_bonus_valid():
             msg = self.font_small.render("Make all required selections to continue.", True, (255, 100, 100))
-            self.screen.blit(msg, (40, 500))
+            self.screen.blit(msg, (40, 485))
 
         self.species_bonus_continue_button.draw(self.screen, self.font_medium)
 
@@ -1285,9 +1287,14 @@ class CharacterCreatorGUI:
         features_title = self.font_medium.render("Class Features:", True, COLOR_TEXT_SELECTED)
         self.screen.blit(features_title, (30, y))
         y += 35
-        
+
+        max_review_y = 495
         feature_summary = get_class_feature_summaries(self.selected_class)
         for line in feature_summary.split("\n"):
+            if y > max_review_y:
+                overflow = self.font_small.render("...", True, COLOR_TEXT)
+                self.screen.blit(overflow, (40, max_review_y))
+                break
             feature_text = self.font_small.render(line, True, COLOR_TEXT)
             self.screen.blit(feature_text, (40, y))
             y += 20

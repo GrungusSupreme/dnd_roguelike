@@ -16,6 +16,19 @@ class TestWaves(unittest.TestCase):
         with self.assertRaises(ValueError):
             spawn_wave(0)
 
+    def test_wave_three_includes_varied_enemy_types(self):
+        enemies = spawn_wave(3, count=6)
+        names = [enemy.name for enemy in enemies]
+        self.assertTrue(any("Orc" in name for name in names))
+        self.assertTrue(any("Skeleton" in name for name in names))
+        self.assertTrue(any("Goblin" in name for name in names))
+
+    def test_later_wave_can_spawn_troll_and_mage(self):
+        enemies = spawn_wave(6, count=8)
+        names = [enemy.name for enemy in enemies]
+        self.assertTrue(any("Troll" in name for name in names))
+        self.assertTrue(any("Mage" in name for name in names))
+
 
 if __name__ == "__main__":
     unittest.main()

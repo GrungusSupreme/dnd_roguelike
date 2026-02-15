@@ -26,6 +26,10 @@ COLOR_BUTTON_TEXT = (230, 230, 230)
 COLOR_TREE = (40, 90, 40)         # Trees (cover, no blocking)
 COLOR_ROCK = (80, 80, 70)         # Rocks (cover + blocking)
 COLOR_COVER = (200, 200, 80)       # Cover indicator
+COLOR_THREAT_LOW = (120, 220, 120)
+COLOR_THREAT_MED = (230, 220, 110)
+COLOR_THREAT_HIGH = (255, 150, 90)
+COLOR_THREAT_BOSS = (255, 90, 90)
 
 GRID_WIDTH = 64
 GRID_HEIGHT = 64
@@ -35,6 +39,27 @@ KEEP_START_Y = (GRID_HEIGHT - KEEP_SIZE) // 2
 GATE_WIDTH = 2
 GATE_X = KEEP_START_X + (KEEP_SIZE // 2) - (GATE_WIDTH // 2)
 GATE_Y = KEEP_START_Y + KEEP_SIZE - 1
+
+SKILL_TO_ABILITY = {
+    "Acrobatics": "DEX",
+    "Animal Handling": "WIS",
+    "Arcana": "INT",
+    "Athletics": "STR",
+    "Deception": "CHA",
+    "History": "INT",
+    "Insight": "WIS",
+    "Intimidation": "CHA",
+    "Investigation": "INT",
+    "Medicine": "WIS",
+    "Nature": "INT",
+    "Perception": "WIS",
+    "Performance": "CHA",
+    "Persuasion": "CHA",
+    "Religion": "INT",
+    "Sleight of Hand": "DEX",
+    "Stealth": "DEX",
+    "Survival": "WIS",
+}
 
 class GameWindow:
     """Pygame window for rendering the battle grid."""
@@ -74,8 +99,10 @@ class GameWindow:
         self.font_small = pygame.font.Font(None, 18)
         self.running = True
         self.action_buttons = []
+        self.sheet_buttons = []
         self.action_tooltips = {}
         self.show_inventory = False
+        self.show_character_sheet = False
         self._update_ui_scale()
         self._fit_zoom_to_window()
         self._clamp_camera()
@@ -169,6 +196,64 @@ class GameWindow:
             if rect.collidepoint(screen_pos):
                 return self.action_tooltips.get(action)
         return None
+
+    def get_sheet_action_at(self, screen_pos: Tuple[int, int]) -> Optional[str]:
+        for rect, action in self.sheet_buttons:
+            if rect.collidepoint(screen_pos):
+                return action
+        return None
+
+    def _format_mod(self, value: int) -> str:
+        return f"+{value}" if value >= 0 else str(value)
+
+    def _skill_bonus(self, player: Character, skill_name: str) -> int:
+        ability = SKILL_TO_ABILITY.get(skill_name, "INT")
+        base = player.get_ability_modifier(ability)
+        if skill_name in getattr(player, "skill_proficiencies", []):
+            base += player.get_proficiency_bonus()
+        return base
+
+    def _draw_section_box(self, rect: pygame.Rect, title: str) -> int:
+        pygame.draw.rect(self.screen, (22, 26, 40), rect)
+        pygame.draw.rect(self.screen, COLOR_GRID, rect, 1)
+        title_text = self.font_small.render(title, True, (240, 220, 120))
+        self.screen.blit(title_text, (rect.x + 8, rect.y + 6))
+        return rect.y + 30
+
+    def _clip_text_to_width(self, text: str, max_width: int) -> str:
+        if max_width <= 8:
+            return ""
+        if self.font_small.size(text)[0] <= max_width:
+            return text
+        clipped = text
+        while clipped and self.font_small.size(clipped + "...")[0] > max_width:
+            clipped = clipped[:-1]
+        return (clipped + "...") if clipped else ""
+
+    def _get_enemy_type_color(self, character: Character) -> Tuple[int, int, int]:
+        name = (character.name or "").lower()
+        if "mage" in name or "shaman" in name or "warlock" in name:
+            return (175, 95, 210)
+        if "archer" in name or "skeleton" in name or "hunter" in name:
+            return (220, 150, 80)
+        if "champion" in name or "boss" in name or "troll" in name:
+            return (185, 70, 70)
+        if "healer" in name or getattr(character, "behavior", "") == "healer":
+            return (100, 180, 210)
+        return COLOR_ENEMY
+
+    def _get_threat_color(self, character: Character) -> Tuple[int, int, int]:
+        dmg_score = max(1, getattr(character, "dmg_num", 1)) * max(2, getattr(character, "dmg_die", 4))
+        attack_score = max(0, getattr(character, "attack_bonus", 0))
+        hp_score = max(1, getattr(character, "max_hp", 1))
+        threat_score = attack_score + (dmg_score / 4) + (hp_score / 8)
+        if threat_score >= 16:
+            return COLOR_THREAT_BOSS
+        if threat_score >= 11:
+            return COLOR_THREAT_HIGH
+        if threat_score >= 7:
+            return COLOR_THREAT_MED
+        return COLOR_THREAT_LOW
         
     def draw_grid(self):
         """Draw the battle grid."""
@@ -239,7 +324,7 @@ class GameWindow:
             character: Character object
             is_player: Whether this is the player character
         """
-        color = COLOR_PLAYER if is_player else COLOR_ENEMY
+        color = COLOR_PLAYER if is_player else self._get_enemy_type_color(character)
         top_left = self.grid_to_screen(x, y)
         cx = top_left[0] + self.cell_size // 2
         cy = top_left[1] + self.cell_size // 2
@@ -247,6 +332,8 @@ class GameWindow:
         
         # Draw character circle
         pygame.draw.circle(self.screen, color, (cx, cy), radius)
+        if not is_player:
+            pygame.draw.circle(self.screen, self._get_threat_color(character), (cx, cy), radius + 2, width=2)
         if highlight:
             pygame.draw.circle(self.screen, COLOR_SELECTED, (cx, cy), radius + 2, width=2)
         
@@ -268,6 +355,9 @@ class GameWindow:
         name_text = self.font_small.render(character.name, True, COLOR_TEXT)
         self.screen.blit(name_text, (top_left[0] + 2, top_left[1] + self.cell_size + 2))
 
+        hp_label = self.font_small.render(f"{character.hp}/{character.max_hp}", True, COLOR_TEXT)
+        self.screen.blit(hp_label, (top_left[0] + 2, top_left[1] + self.cell_size + 16))
+
         if in_cover:
             cover_text = self.font_small.render("C", True, COLOR_COVER)
             self.screen.blit(cover_text, (top_left[0] + 2, top_left[1] + 2))
@@ -277,6 +367,7 @@ class GameWindow:
         player: Character,
         enemies: list[Character],
         message: str = "",
+        keep_status: str = "",
         combat_log: Optional[list[str]] = None,
         spent_action: bool = False,
         spent_bonus_action: bool = False,
@@ -311,17 +402,33 @@ class GameWindow:
         text = self.font_small.render(economy_text, True, COLOR_SELECTED if hidden else COLOR_TEXT)
         self.screen.blit(text, (10, y_offset))
 
+        if keep_status:
+            y_offset += int(22 * self.ui_scale)
+            keep_text = self.font_small.render(keep_status, True, (170, 210, 255))
+            self.screen.blit(keep_text, (10, y_offset))
+
         slot_summary = player.get_spell_slots_summary() if hasattr(player, "get_spell_slots_summary") else ""
         if slot_summary:
             y_offset += int(22 * self.ui_scale)
             slot_text = self.font_small.render(f"Spell Slots: {slot_summary}", True, COLOR_SELECTED)
             self.screen.blit(slot_text, (10, y_offset))
+
+        status_summary = player.get_status_summary() if hasattr(player, "get_status_summary") else ""
+        if status_summary:
+            y_offset += int(22 * self.ui_scale)
+            status_text = self.font_small.render(f"Status: {status_summary}", True, (255, 180, 120))
+            self.screen.blit(status_text, (10, y_offset))
         
         # Message
         if message:
             y_offset += int(25 * self.ui_scale)
             msg_text = self.font_small.render(message, True, COLOR_SELECTED)
             self.screen.blit(msg_text, (10, y_offset))
+
+        y_offset += int(22 * self.ui_scale)
+        legend_text = "Threat Ring: Green=Low  Yellow=Med  Orange=High  Red=Boss"
+        legend = self.font_small.render(legend_text, True, (170, 190, 210))
+        self.screen.blit(legend, (10, y_offset))
 
         # Combat log panel (right side)
         log_x = int(self.width * 0.55)
@@ -423,6 +530,13 @@ class GameWindow:
             "Bonus"
         ))
 
+        actions.append((
+            "Character Sheet",
+            "character_sheet",
+            False,
+            ""
+        ))
+
         if hasattr(player, "get_species_bonus_actions"):
             for label, action_name, uses_left, uses_max in player.get_species_bonus_actions():
                 btn_label = f"{label} ({uses_left}/{uses_max})"
@@ -453,6 +567,7 @@ class GameWindow:
             "species_magic": "Use lineage/legacy species magic (costs Action)",
             "toggle_spells": "Open/close your spell list",
             "use_item": "Use a potion (costs Bonus Action)",
+            "character_sheet": "Open character sheet (inventory, skills, proficiencies)",
             "stonecunning": "Gain Tremorsense 60 ft for 10 minutes (Bonus Action)",
             "adrenaline_rush": "Gain temporary HP and Dash as a Bonus Action",
             "cloud_jaunt": "Teleport up to 30 ft (Bonus Action)",
@@ -496,9 +611,11 @@ class GameWindow:
         btn_height = int(26 * self.ui_scale)
         padding = int(8 * self.ui_scale)
         start_x = int(10 * self.ui_scale)
-        start_y = panel_y + int(85 * self.ui_scale)
+        min_start_y = panel_y + int(85 * self.ui_scale)
+        start_y = max(min_start_y, y_offset + int(14 * self.ui_scale))
         action_area_width = int(self.width * 0.52) - start_x
         max_cols = max(1, action_area_width // (btn_width + padding))
+        panel_bottom = panel_y + panel_height
 
         mouse_pos = pygame.mouse.get_pos()
         for idx, action_data in enumerate(actions):
@@ -513,6 +630,8 @@ class GameWindow:
             col = idx % max_cols
             x = start_x + col * (btn_width + padding)
             y = start_y + row * (btn_height + padding)
+            if y + btn_height > panel_bottom - int(6 * self.ui_scale):
+                continue
             rect = pygame.Rect(x, y, btn_width, btn_height)
             self.action_buttons.append((rect, action))
             self._draw_button(rect, label, rect.collidepoint(mouse_pos), disabled=is_disabled)
@@ -562,112 +681,176 @@ class GameWindow:
         return GATE_X <= grid_x < GATE_X + GATE_WIDTH
     
     def draw_inventory(self, player: Character):
-        """Draw the inventory/equipment management overlay."""
-        from items import WEAPONS, ARMOR
-        
-        # Semi-transparent overlay
+        """Backward-compatible inventory overlay entrypoint."""
+        self.draw_character_sheet(player)
+
+    def draw_character_sheet(self, player: Character):
+        self.sheet_buttons = []
         overlay = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 200))
+        overlay.fill((0, 0, 0, 190))
         self.screen.blit(overlay, (0, 0))
-        
-        # Panel background
-        panel_width = 700
-        panel_height = 500
+        mouse_pos = pygame.mouse.get_pos()
+
+        panel_width = min(1080, self.width - 40)
+        panel_height = min(760, self.height - 40)
         panel_x = (self.width - panel_width) // 2
         panel_y = (self.height - panel_height) // 2
         panel_rect = pygame.Rect(panel_x, panel_y, panel_width, panel_height)
-        pygame.draw.rect(self.screen, COLOR_BUTTON, panel_rect)
-        pygame.draw.rect(self.screen, COLOR_TEXT, panel_rect, 3)
-        
-        y = panel_y + 20
-        
-        # Title
-        title_text = self.font_large.render("Equipment & Inventory", True, (255, 255, 0))
-        title_rect = title_text.get_rect(center=(self.width // 2, y))
-        self.screen.blit(title_text, title_rect)
-        y += 40
-        
-        # Current Equipment Section
-        equip_label = self.font_large.render("Current Equipment:", True, (200, 200, 100))
-        self.screen.blit(equip_label, (panel_x + 30, y))
-        y += 35
-        
-        # Display weapon
-        weapon_name = "None"
-        weapon_damage = ""
-        if player.equipped_weapon:
-            weapon_name = player.equipped_weapon.name
-            weapon_damage = f" ({player.equipped_weapon.dmg_num}d{player.equipped_weapon.dmg_die}+DEX)"
-        weapon_text = self.font_small.render(f"Weapon: {weapon_name}{weapon_damage}", True, COLOR_TEXT)
-        self.screen.blit(weapon_text, (panel_x + 50, y))
-        y += 30
-        
-        # Display armor
-        armor_name = "None"
-        armor_ac = ""
-        if player.equipped_armor:
-            armor_name = player.equipped_armor.name
-            armor_ac = f" (AC {player.equipped_armor.ac_base}"
-            if player.equipped_armor.ac_bonus_dex:
-                armor_ac += "+DEX"
-            armor_ac += ")"
-        armor_text = self.font_small.render(f"Armor: {armor_name}{armor_ac}", True, COLOR_TEXT)
-        self.screen.blit(armor_text, (panel_x + 50, y))
-        y += 30
-        
-        # Display calculated stats
-        ac_text = self.font_small.render(f"AC: {player.get_ac()}", True, (100, 255, 100))
-        self.screen.blit(ac_text, (panel_x + 50, y))
-        y += 25
-        
-        dmg_num, dmg_die = player.get_damage_dice()
-        dmg_bonus = player.get_damage_bonus()
-        dmg_text = self.font_small.render(f"Damage: {dmg_num}d{dmg_die}+{dmg_bonus}", True, (255, 150, 100))
-        self.screen.blit(dmg_text, (panel_x + 50, y))
-        y += 35
-        
-        # Available Equipment Section
-        avail_label = self.font_large.render("Available Equipment:", True, (200, 200, 100))
-        self.screen.blit(avail_label, (panel_x + 30, y))
-        y += 35
-        
-        # Show available weapons and armor (limited to space)
-        line_height = 22
-        remaining_space = panel_height - (y - panel_y) - 40
-        max_lines = remaining_space // line_height
-        
-        # Weapons
-        weapons_text = self.font_small.render("Weapons:", True, (150, 200, 255))
-        self.screen.blit(weapons_text, (panel_x + 50, y))
-        y += line_height
-        
-        weapon_count = 0
-        for weapon_name, weapon in WEAPONS.items():
-            if weapon_count >= 3:  # Show top 3 weapons
+        pygame.draw.rect(self.screen, (28, 34, 54), panel_rect)
+        pygame.draw.rect(self.screen, COLOR_TEXT, panel_rect, 2)
+
+        title = f"{player.name} - Character Sheet"
+        title_text = self.font_large.render(title, True, (255, 255, 120))
+        self.screen.blit(title_text, (panel_x + 18, panel_y + 14))
+
+        subtitle = (
+            f"{player.class_name}  Lv{player.level}  |  HP {player.hp}/{player.max_hp}  |  AC {player.get_ac()}  "
+            f"|  PB {self._format_mod(player.get_proficiency_bonus())}  |  Gold {player.gold}"
+        )
+        subtitle_text = self.font_small.render(subtitle, True, COLOR_TEXT)
+        self.screen.blit(subtitle_text, (panel_x + 18, panel_y + 44))
+
+        left_col_x = panel_x + 16
+        mid_col_x = panel_x + panel_width // 3
+        right_col_x = panel_x + (2 * panel_width) // 3
+        col_width = panel_width // 3 - 22
+        top_y = panel_y + 78
+
+        ability_rect = pygame.Rect(left_col_x, top_y, col_width, 184)
+        y = self._draw_section_box(ability_rect, "Abilities")
+        for ability in ["STR", "DEX", "CON", "INT", "WIS", "CHA"]:
+            score = player.ability_scores.get(ability, 10)
+            mod = player.get_ability_modifier(ability)
+            line = f"{ability}: {score:>2} ({self._format_mod(mod)})"
+            line_text = self.font_small.render(line, True, COLOR_TEXT)
+            self.screen.blit(line_text, (ability_rect.x + 12, y))
+            y += 22
+
+        equip_rect = pygame.Rect(left_col_x, top_y + 196, col_width, panel_height - 292)
+        y = self._draw_section_box(equip_rect, "Equipment & Attunement")
+
+        btn_w = 72
+        btn_h = 20
+        equip_btn_x = equip_rect.right - btn_w - 10
+
+        weapon_text = player.equipped_weapon.name if player.equipped_weapon else "Empty"
+        armor_text = player.equipped_armor.name if player.equipped_armor else "Empty"
+        offhand_text = player.equipped_offhand.name if player.equipped_offhand else "Empty"
+
+        equipment_lines = [
+            (f"Weapon: {weapon_text}", "sheet::unequip_weapon" if player.equipped_weapon else ""),
+            (f"Armor: {armor_text}", "sheet::unequip_armor" if player.equipped_armor else ""),
+            (f"Offhand: {offhand_text}", "sheet::unequip_offhand" if player.equipped_offhand else ""),
+            (f"Attack Range: {player.get_attack_range()}", ""),
+            (f"Damage: {player.get_damage_dice()[0]}d{player.get_damage_dice()[1]}{self._format_mod(player.get_damage_bonus())}", ""),
+        ]
+        for line, action in equipment_lines:
+            text_max_width = equip_rect.width - 24
+            if action:
+                text_max_width = max(40, equip_btn_x - (equip_rect.x + 12) - 8)
+            line = self._clip_text_to_width(line, text_max_width)
+            text = self.font_small.render(line, True, COLOR_TEXT)
+            self.screen.blit(text, (equip_rect.x + 12, y))
+            if action:
+                button_rect = pygame.Rect(equip_btn_x, y - 1, btn_w, btn_h)
+                self._draw_button(button_rect, "Unequip", button_rect.collidepoint(mouse_pos))
+                self.sheet_buttons.append((button_rect, action))
+            y += 22
+
+        y += 4
+        attune_title = self.font_small.render("Magic Attunement", True, (170, 210, 255))
+        self.screen.blit(attune_title, (equip_rect.x + 12, y))
+        y += 24
+
+        attuned_items = []
+        if hasattr(player, "attuned_magic_items"):
+            value = getattr(player, "attuned_magic_items")
+            if isinstance(value, list):
+                attuned_items = value[:]
+        for idx in range(3):
+            slot_name = "Empty Slot"
+            if idx < len(attuned_items):
+                item = attuned_items[idx]
+                slot_name = getattr(item, "name", str(item))
+            line = self.font_small.render(f"Slot {idx + 1}: {slot_name}", True, COLOR_TEXT)
+            self.screen.blit(line, (equip_rect.x + 12, y))
+            y += 22
+
+        skills_rect = pygame.Rect(mid_col_x, top_y, col_width, panel_height - 96)
+        y = self._draw_section_box(skills_rect, "Skills")
+        for skill_name, ability in sorted(SKILL_TO_ABILITY.items()):
+            bonus = self._skill_bonus(player, skill_name)
+            mark = "*" if skill_name in player.skill_proficiencies else " "
+            line = f"{mark} {skill_name[:16]:<16} ({ability}) {self._format_mod(bonus):>3}"
+            text = self.font_small.render(line, True, COLOR_TEXT)
+            self.screen.blit(text, (skills_rect.x + 8, y))
+            y += 20
+            if y > skills_rect.bottom - 44:
                 break
-            w_text = self.font_small.render(f"  {weapon_name} (1d{weapon.dmg_die}, {weapon.value}gp)", True, COLOR_TEXT)
-            self.screen.blit(w_text, (panel_x + 70, y))
-            y += line_height
-            weapon_count += 1
-        
-        # Armor
-        armor_label = self.font_small.render("Armor:", True, (150, 200, 255))
-        self.screen.blit(armor_label, (panel_x + 50, y))
-        y += line_height
-        
-        armor_count = 0
-        for armor_name, armor in ARMOR.items():
-            if armor_count >= 3:  # Show top 3 armor
+
+        prof_rect = pygame.Rect(right_col_x, top_y, col_width, 248)
+        y = self._draw_section_box(prof_rect, "Proficiencies")
+
+        prof_lines = []
+        if player.skill_proficiencies:
+            prof_lines.append("Skills:")
+            for name in sorted(player.skill_proficiencies):
+                prof_lines.append(f"- {name}")
+        else:
+            prof_lines.append("Skills: None")
+
+        if player.tool_proficiencies:
+            prof_lines.append("Tools:")
+            for name in sorted(player.tool_proficiencies):
+                prof_lines.append(f"- {name}")
+        else:
+            prof_lines.append("Tools: None")
+
+        for line in prof_lines:
+            text = self.font_small.render(line, True, COLOR_TEXT)
+            self.screen.blit(text, (prof_rect.x + 8, y))
+            y += 20
+            if y > prof_rect.bottom - 16:
                 break
-            a_text = self.font_small.render(f"  {armor_name} (AC {armor.ac_base}, {armor.value}gp)", True, COLOR_TEXT)
-            self.screen.blit(a_text, (panel_x + 70, y))
-            y += line_height
-            armor_count += 1
-        
-        # Close instruction
-        close_text = self.font_small.render("Press 'I' or ESC to close", True, (180, 180, 180))
-        close_rect = close_text.get_rect(center=(self.width // 2, panel_y + panel_height - 15))
-        self.screen.blit(close_text, close_rect)
+
+        inv_rect = pygame.Rect(right_col_x, top_y + 260, col_width, panel_height - 356)
+        y = self._draw_section_box(inv_rect, "Inventory")
+        if player.inventory:
+            for inv_index, item in enumerate(player.inventory):
+                item_name = getattr(item, "name", str(item))
+                item_kind = getattr(item, "kind", "")
+                label = f"- {item_name}" if not item_kind else f"- {item_name} ({item_kind})"
+                label_max_width = inv_rect.width - 20
+                if item_kind == "weapon":
+                    label_max_width = max(40, (inv_rect.right - 154) - (inv_rect.x + 8) - 8)
+                elif item_kind == "armor":
+                    label_max_width = max(40, (inv_rect.right - 82) - (inv_rect.x + 8) - 8)
+                label = self._clip_text_to_width(label, label_max_width)
+                text = self.font_small.render(label, True, COLOR_TEXT)
+                self.screen.blit(text, (inv_rect.x + 8, y))
+
+                if item_kind == "weapon":
+                    main_rect = pygame.Rect(inv_rect.right - 154, y - 1, 66, 20)
+                    off_rect = pygame.Rect(inv_rect.right - 82, y - 1, 66, 20)
+                    self._draw_button(main_rect, "Main", main_rect.collidepoint(mouse_pos))
+                    self._draw_button(off_rect, "Off", off_rect.collidepoint(mouse_pos))
+                    self.sheet_buttons.append((main_rect, f"sheet::equip_weapon::{inv_index}"))
+                    self.sheet_buttons.append((off_rect, f"sheet::equip_offhand::{inv_index}"))
+                elif item_kind == "armor":
+                    armor_rect = pygame.Rect(inv_rect.right - 82, y - 1, 66, 20)
+                    self._draw_button(armor_rect, "Equip", armor_rect.collidepoint(mouse_pos))
+                    self.sheet_buttons.append((armor_rect, f"sheet::equip_armor::{inv_index}"))
+
+                y += 20
+                if y > inv_rect.bottom - 16:
+                    break
+        else:
+            text = self.font_small.render("(Inventory Empty)", True, COLOR_TEXT)
+            self.screen.blit(text, (inv_rect.x + 8, y))
+
+        hint = self.font_small.render("Press C, I, or ESC to close", True, (180, 180, 180))
+        hint_rect = hint.get_rect(midbottom=(self.width // 2, panel_y + panel_height - 10))
+        self.screen.blit(hint, hint_rect)
     
     def render(
         self,
@@ -676,6 +859,7 @@ class GameWindow:
         enemies: list,
         enemy_positions: dict,
         message: str = "",
+        keep_status: str = "",
         combat_log: Optional[list[str]] = None,
         spent_action: bool = False,
         spent_bonus_action: bool = False,
@@ -766,6 +950,7 @@ class GameWindow:
             player,
             enemies,
             message,
+            keep_status=keep_status,
             combat_log=combat_log,
             spent_action=spent_action,
             spent_bonus_action=spent_bonus_action,
@@ -783,9 +968,8 @@ class GameWindow:
             tooltip_rect.bottomleft = (10, self.height - 5)
             self.screen.blit(tooltip_surf, tooltip_rect)
         
-        # Draw inventory overlay if shown
-        if self.show_inventory:
-            self.draw_inventory(player)
+        if self.show_character_sheet or self.show_inventory:
+            self.draw_character_sheet(player)
         
         pygame.display.flip()
         self.clock.tick(60)  # 60 FPS
@@ -808,9 +992,19 @@ class GameWindow:
                     self._fit_zoom_to_window()
                 self._clamp_camera()
             if event.type == pygame.MOUSEBUTTONDOWN:
+                if self.show_character_sheet or self.show_inventory:
+                    if event.button == 1:
+                        sheet_action = self.get_sheet_action_at(event.pos)
+                        if sheet_action:
+                            return {"type": "action", "action": sheet_action}
+                    continue
                 if event.button == 1:  # Left click
                     action = self.get_action_at(event.pos)
                     if action:
+                        if action == "character_sheet":
+                            self.show_character_sheet = not self.show_character_sheet
+                            self.show_inventory = False
+                            return None
                         return {"type": "action", "action": action}
                     grid_pos = self.screen_to_grid(event.pos[0], event.pos[1])
                     if grid_pos:
@@ -826,12 +1020,17 @@ class GameWindow:
                     self._apply_zoom(self.zoom - 0.1, pivot=pygame.mouse.get_pos())
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    if self.show_inventory:
+                    if self.show_character_sheet or self.show_inventory:
+                        self.show_character_sheet = False
                         self.show_inventory = False
                     else:
                         self.running = False
                 if event.key == pygame.K_i:
-                    self.show_inventory = not self.show_inventory
+                    self.show_character_sheet = not self.show_character_sheet
+                    self.show_inventory = False
+                if event.key == pygame.K_c:
+                    self.show_character_sheet = not self.show_character_sheet
+                    self.show_inventory = False
         return None
 
     def update_camera(self) -> None:

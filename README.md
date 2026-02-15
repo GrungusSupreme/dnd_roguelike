@@ -147,6 +147,20 @@ tests/              - Unit tests
 
 ## Development Notes
 
+## Multi-Agent Workflow (No-Code)
+
+If you want to run this project without writing code, use the built-in multi-agent kit:
+
+- `AGENT_OPERATIONS.md` - roles, rules, cadence, and definition of done
+- `AGENT_PROMPTS.md` - copy/paste prompts for Builder, Reviewer, QA/Balance, and orchestrated sessions
+
+Recommended workflow:
+1. Fill a Task Card from `AGENT_OPERATIONS.md`
+2. Run Builder prompt from `AGENT_PROMPTS.md`
+3. Run Reviewer prompt
+4. Run Builder fix pass
+5. (Optional) Run QA/Balance prompt
+
 The GUI version features:
 - **64x64 grid** with visual rendering
 - **8x8 keep** (defend this region)

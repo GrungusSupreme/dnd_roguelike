@@ -1,9 +1,108 @@
 # dnd_roguelike — Changelog & Project State
 
-**Last Updated:** 2026-02-14 (Session 7 - Spellcasting + Species Trait Completion)  
-**Version:** 0.6.0 (Combat Spellcasting + Expanded Species Mechanics)
+**Last Updated:** 2026-02-14 (Session 9 - Phase 3 Slice 1)  
+**Version:** 0.8.1 (Calendar + Keep Loop Foundation)
 
 This file documents the complete project state for reference when clearing chat history.
+
+---
+
+## 📋 Session 9 - Phase 3 Slice 1 (Calendar + Keep Resource Loop)
+
+### ✅ COMPLETED THIS SESSION
+
+#### **Step 1: Keep Management Foundation Module**
+- Added `keep_management.py` with `KeepState`:
+  - Calendar tracking (`month`, `day`, month rollover)
+  - Keep resources (`food`, `supplies`, `morale`)
+  - Daily raid resolution method (`advance_raid_day`) with simple upkeep/effects
+
+#### **Step 2: Runtime Integration in GUI Loop**
+- Integrated persistent keep state into `main_gui.py`:
+  - `KeepState` created once and preserved across waves
+  - Wave outcomes now advance day and apply keep resource changes
+  - Keep update messages are surfaced in run output after each wave
+
+#### **Step 3: In-Combat UI Visibility**
+- Added keep status line to bottom UI panel in `gui.py`:
+  - Date (month/day)
+  - Food
+  - Supplies
+  - Morale
+
+#### **Step 4: Test Coverage**
+- Added `tests/test_keep_management.py`:
+  - Raid day resource updates
+  - Month/day rollover validation
+
+#### **Step 5: Validation**
+- Targeted suite passed:
+  - `tests.test_keep_management`
+  - `tests.test_waves`
+  - `tests.test_phase2_features`
+- Compile checks passed for:
+  - `keep_management.py`
+  - `main_gui.py`
+  - `gui.py`
+
+### 📊 Current Project State
+
+**Game Status:** Wave defense prototype with Phase 3 slice 1 live in runtime (v0.8.1)  
+**Phase Status:** Phase 1 ✅ | Phase 2 ✅ | Phase 3 (Slice 1) ✅  
+**Next Priority:** Phase 3 slice 2 - add one random event type and one keep upgrade path
+
+---
+
+## 📋 Session 8 - Phase 2 Completion
+
+### ✅ COMPLETED THIS SESSION
+
+#### **Step 1: Character Sheet + Equipment UX Integration**
+- Added dedicated character-sheet popup with D&D-style sections (abilities, skills, proficiencies, equipment, inventory, attunement slots).
+- Added sheet actions and hotkeys (`C`/`I`) with modal behavior.
+- Added clickable equipment management from sheet (equip/unequip main hand, offhand, armor).
+
+#### **Step 2: Combat Visual Readability Upgrades**
+- Added enemy archetype visual colors and threat ring indicators.
+- Added on-map HP labels and panel legend for threat colors.
+
+#### **Step 3: Enemy Variety Expansion (Phase 2 requirement)**
+- Added multiple enemy archetypes in runtime waves:
+  - Orc
+  - Skeleton
+  - Troll
+  - Goblin Mage
+- Updated wave composition to mixed-roster spawns by wave tier.
+- Added distinct behaviors:
+  - Troll regeneration each enemy phase
+  - Healer support behavior for allied enemies
+  - Mage poison application chance on hit
+
+#### **Step 4: Remaining Feature Integration Gaps Closed**
+- Implemented Action Surge as a true extra-action economy gain (not just a message).
+- Added class-based Unarmored Defense formulas to AC:
+  - Barbarian: `10 + DEX + CON`
+  - Monk: `10 + DEX + WIS`
+- Added lightweight status-effect system with combat impact (`Poisoned` attack penalty) and UI status display.
+
+#### **Step 5: Test Coverage and Validation**
+- Added `tests/test_phase2_features.py` for:
+  - Unarmored Defense (Barbarian/Monk)
+  - Poisoned attack penalty
+  - Action economy gain for Action Surge
+- Expanded wave tests for mixed archetype coverage and late-wave Troll/Mage presence.
+- Focused Phase 2 validation suite passed:
+  - `tests.test_phase2_features`
+  - `tests.test_waves`
+  - `tests.test_healer`
+  - `tests.test_spells`
+  - `tests.test_species_traits`
+
+### 📊 Current Project State
+
+**Game Status:** Wave defense prototype with Phase 2 feature integration completed (v0.8.0)  
+**Phase Status:** Phase 1 ✅ | Phase 2 ✅ | Phase 3 planning next  
+**Next Priority:** Begin first constrained Phase 3 vertical slice
 
 ---
 

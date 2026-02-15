@@ -10,6 +10,7 @@ from creator import create_character_interactive
 from character_creator_gui import select_character_gui
 from waves import spawn_wave
 from class_definitions import generate_level_1_stats
+from keep_management import KeepState
 from gui import (
     GameWindow,
     KEEP_START_X,
@@ -28,8 +29,9 @@ import math
 class GameState:
     """Manages game state including character positions."""
     
-    def __init__(self, player: Character):
+    def __init__(self, player: Character, keep_state: KeepState | None = None):
         self.player = player
+        self.keep_state = keep_state
         self.player_pos = (KEEP_START_X + KEEP_SIZE // 2, KEEP_START_Y + KEEP_SIZE // 2)
         self.enemies = []
         self.enemy_positions = {}  # enemy -> (x, y)
@@ -41,6 +43,7 @@ class GameState:
         self.pause_frames = 0  # Frames to pause before next action
         self.round_number = 0
         # Action economy tracking
+        self.actions_remaining = 1
         self.spent_action = False  # True if standard action used
         self.spent_bonus_action = False  # True if bonus action used
         # Visibility/stealth tracking
@@ -155,6 +158,28 @@ class GameState:
         self.combat_log.append(text)
         if len(self.combat_log) > 200:
             self.combat_log = self.combat_log[-200:]
+
+    def keep_status_line(self) -> str:
+        if self.keep_state is None:
+            return ""
+        return self.keep_state.status_line()
+
+    def can_use_action(self) -> bool:
+        return self.actions_remaining > 0
+
+    def spend_action(self) -> bool:
+        if self.actions_remaining <= 0:
+            self.spent_action = True
+            return False
+        self.actions_remaining -= 1
+        self.spent_action = self.actions_remaining <= 0
+        return True
+
+    def gain_action(self, amount: int = 1) -> None:
+        if amount <= 0:
+            return
+        self.actions_remaining += amount
+        self.spent_action = self.actions_remaining <= 0
     
     def move_player(self, target_x: int, target_y: int) -> bool:
         """Move player to target position on grid. Return True if moved."""
@@ -223,7 +248,7 @@ class GameState:
                 self.message = f"Hit {enemy.name} for some damage!"
                 self.message_timer = 30
                 self.add_log(self.message)
-            self.spent_action = True
+            self.spend_action()
             return True
         self.message = "No enemy on that tile."
         self.message_timer = 30
@@ -266,7 +291,7 @@ class GameState:
                 self.message_timer = 30
                 self.add_log(self.message)
 
-            self.spent_action = True
+            self.spend_action()
             return True
 
         self.message = "No enemy on that tile."
@@ -310,7 +335,7 @@ class GameState:
                 self.message_timer = 30
                 self.add_log(self.message)
 
-            self.spent_action = True
+            self.spend_action()
             return True
 
         self.message = "No enemy on that tile."
@@ -355,7 +380,7 @@ class GameState:
                 self.message_timer = 30
                 self.add_log(self.message)
 
-            self.spent_action = True
+            self.spend_action()
             return True
 
         self.message = "No enemy on that tile."
@@ -466,7 +491,7 @@ class GameState:
             self.message = f"{spell_name} resolves."
             self.message_timer = 30
 
-        self.spent_action = True
+        self.spend_action()
         return True
     
     def move_enemies(self):
@@ -540,6 +565,11 @@ class GameState:
         for enemy in self.enemies:
             if not enemy.is_alive():
                 continue
+
+            if getattr(enemy, "behavior", "") == "regenerator" and enemy.hp < enemy.max_hp:
+                healed = enemy.heal(2)
+                if healed > 0:
+                    self.add_log(f"{enemy.name} regenerates {healed} HP.")
             
             if enemy not in self.enemy_positions:
                 continue
@@ -557,9 +587,22 @@ class GameState:
             # Update last known position if in range and can see
             if distance <= enemy.attack_range or distance <= 3:  # Liberal vision range
                 self.last_known_player_pos = (px, py)
+
+            if getattr(enemy, "behavior", "") == "healer" and enemy.potions > 0:
+                wounded = [ally for ally in self.enemies if ally.is_alive() and ally is not enemy and ally.hp < ally.max_hp]
+                if wounded:
+                    target = min(wounded, key=lambda ally: ally.hp)
+                    healed = enemy.heal_ally(target, 7)
+                    if healed > 0:
+                        self.add_log(f"{enemy.name} heals {target.name} for {healed} HP.")
+                        continue
             
             if enemy.is_alive() and distance <= enemy.attack_range:
-                enemy.attack(self.player, log_fn=self.add_log)
+                attack_result = enemy.attack(self.player, log_fn=self.add_log)
+                if getattr(enemy, "behavior", "") == "mage" and "-> HIT" in attack_result and self.player.is_alive():
+                    if random.random() < 0.35:
+                        self.player.apply_status_effect("poisoned", rounds=2, potency=2)
+                        self.add_log(f"{enemy.name} inflicts Poisoned on {self.player.name} (2 rounds).")
                 if not self.player.is_alive():
                     self.message = "You have been slain!"
                     self.message_timer = 60
@@ -578,6 +621,7 @@ class GameState:
                 self.player.start_turn()
                 self.movement_max = max(1, self.player.get_speed_ft() // 5)
                 self.movement_used = 0
+                self.actions_remaining = 1
                 self.spent_action = False
                 self.spent_bonus_action = False
                 self.sneak_attack_used_this_turn = False
@@ -651,6 +695,7 @@ def main():
     
     # Initialize window
     window = GameWindow(cell_size=12, use_fullscreen=True)
+    keep_state = KeepState()
     
     try:
         # Wave loop
@@ -660,9 +705,9 @@ def main():
             
             # Spawn wave
             enemies = spawn_wave(wave)
-            state = GameState(player)
+            state = GameState(player, keep_state=keep_state)
             state.add_enemies(enemies)
-            state.message = f"Wave {wave}! Defend the keep!"
+            state.message = f"Wave {wave}! Defend the keep! {keep_state.status_line()}"
             state.message_timer = 60
 
             if hasattr(player, "restore_spell_slots"):
@@ -680,9 +725,58 @@ def main():
                 if clicked and state.turn_phase == "player_input":
                     if clicked.get("type") == "action":
                         action = clicked.get("action")
+                        if action and action.startswith("sheet::"):
+                            parts = action.split("::")
+                            sheet_action = parts[1] if len(parts) > 1 else ""
+                            handled_sheet = False
+
+                            if sheet_action == "unequip_weapon":
+                                handled_sheet = player.unequip_weapon()
+                                state.message = "Weapon unequipped." if handled_sheet else "No weapon equipped."
+                            elif sheet_action == "unequip_armor":
+                                handled_sheet = player.unequip_armor()
+                                state.message = "Armor unequipped." if handled_sheet else "No armor equipped."
+                            elif sheet_action == "unequip_offhand":
+                                if player.equipped_offhand is not None:
+                                    player.inventory.append(player.equipped_offhand)
+                                    player.equipped_offhand = None
+                                    handled_sheet = True
+                                    state.message = "Offhand unequipped."
+                                else:
+                                    state.message = "No offhand equipped."
+                            elif len(parts) >= 3 and parts[2].isdigit():
+                                inv_index = int(parts[2])
+                                if 0 <= inv_index < len(player.inventory):
+                                    item = player.inventory[inv_index]
+                                    item_kind = getattr(item, "kind", "")
+
+                                    if sheet_action == "equip_weapon" and item_kind == "weapon":
+                                        handled_sheet = player.equip_weapon(item)
+                                        state.message = f"Equipped {getattr(item, 'name', 'weapon')} as main weapon." if handled_sheet else "Could not equip weapon."
+                                    elif sheet_action == "equip_armor" and item_kind == "armor":
+                                        handled_sheet = player.equip_armor(item)
+                                        state.message = f"Equipped {getattr(item, 'name', 'armor')}." if handled_sheet else "Could not equip armor."
+                                    elif sheet_action == "equip_offhand" and item_kind == "weapon":
+                                        prev_offhand = player.equipped_offhand
+                                        player.equipped_offhand = item
+                                        if prev_offhand and prev_offhand not in player.inventory:
+                                            player.inventory.append(prev_offhand)
+                                        if item in player.inventory:
+                                            player.inventory.remove(item)
+                                        handled_sheet = True
+                                        state.message = f"Equipped {getattr(item, 'name', 'weapon')} in offhand."
+                                    else:
+                                        state.message = "That item cannot be equipped there."
+                                else:
+                                    state.message = "Selected inventory item no longer exists."
+
+                            if handled_sheet:
+                                state.add_log(state.message)
+                            state.message_timer = 35
+                            continue
                         # Process SRD action with economy tracking
                         if action == "attack":
-                            if state.spent_action:
+                            if not state.can_use_action():
                                 state.message = "You have already used your action."
                                 state.message_timer = 40
                             else:
@@ -696,7 +790,7 @@ def main():
                             state.message = "Spells opened." if state.spell_menu_open else "Spells closed."
                             state.message_timer = 20
                         elif action == "breath_weapon":
-                            if state.spent_action:
+                            if not state.can_use_action():
                                 state.message = "You have already used your action."
                                 state.message_timer = 40
                             elif not player.can_use_breath_weapon():
@@ -709,7 +803,7 @@ def main():
                                 state.message = "Select a target for Breath Weapon."
                                 state.message_timer = 40
                         elif action == "species_magic":
-                            if state.spent_action:
+                            if not state.can_use_action():
                                 state.message = "You have already used your action."
                                 state.message_timer = 40
                             elif not player.has_species_magic():
@@ -722,7 +816,7 @@ def main():
                                 state.message = f"Select a target for {player.get_species_magic_label()}."
                                 state.message_timer = 40
                         elif action.startswith("spell::"):
-                            if state.spent_action:
+                            if not state.can_use_action():
                                 state.message = "You have already used your action."
                                 state.message_timer = 40
                             else:
@@ -732,7 +826,7 @@ def main():
                                     player.cast_spell(spell_name, target=player, log_fn=state.add_log)
                                     state.message = f"Cast {spell_name}."
                                     state.message_timer = 40
-                                    state.spent_action = True
+                                    state.spend_action()
                                 else:
                                     state.targeting_mode = True
                                     state.targeting_action = action
@@ -740,7 +834,7 @@ def main():
                                     state.message = f"Select a target for {spell_name}."
                                     state.message_timer = 40
                         elif action == "dodge":
-                            if state.spent_action:
+                            if not state.can_use_action():
                                 state.message = "You have already used your action."
                                 state.message_timer = 40
                             else:
@@ -748,7 +842,7 @@ def main():
                                 state.message = "Dodge: +2 AC this round."
                                 state.message_timer = 40
                                 state.add_log(state.message)
-                                state.spent_action = True
+                                state.spend_action()
                         elif action == "use_item":
                             if state.spent_bonus_action:
                                 state.message = "You have already used your bonus action."
@@ -814,7 +908,7 @@ def main():
                                 state.message_timer = 40
                                 state.add_log(state.message)
                         elif action == "dash":
-                            if state.spent_action:
+                            if not state.can_use_action():
                                 state.message = "You have already used your action."
                                 state.message_timer = 40
                             else:
@@ -822,18 +916,18 @@ def main():
                                 state.message = "Dash: movement doubled."
                                 state.message_timer = 40
                                 state.add_log(state.message)
-                                state.spent_action = True
+                                state.spend_action()
                         elif action == "disengage":
-                            if state.spent_action:
+                            if not state.can_use_action():
                                 state.message = "You have already used your action."
                                 state.message_timer = 40
                             else:
                                 state.message = "Disengage: enemies have disadvantage to attack you."
                                 state.message_timer = 40
                                 state.add_log(state.message)
-                                state.spent_action = True
+                                state.spend_action()
                         elif action == "hide":
-                            if state.spent_action:
+                            if not state.can_use_action():
                                 state.message = "You have already used your action."
                                 state.message_timer = 40
                             else:
@@ -841,7 +935,7 @@ def main():
                                 state.message = "Hide: you slip out of sight. Enemies won't see you until you attack."
                                 state.message_timer = 40
                                 state.add_log(state.message)
-                                state.spent_action = True
+                                state.spend_action()
                         elif action == "end_turn":
                             state.turn_phase = "processing"
                             state.player_turn_started = False
@@ -924,7 +1018,8 @@ def main():
                                 feature = player.get_feature("Action Surge")
                                 if feature and feature.use():
                                     state.spent_bonus_action = True
-                                    state.message = "Action Surge: gain an additional action."
+                                    state.gain_action(1)
+                                    state.message = "Action Surge: gained one additional action this turn."
                                 else:
                                     state.message = "Action Surge not available."
                                 state.message_timer = 40
@@ -1044,6 +1139,7 @@ def main():
                     enemies,
                     state.enemy_positions,
                     state.message,
+                    keep_status=state.keep_status_line(),
                     combat_log=state.combat_log,
                     spent_action=state.spent_action,
                     spent_bonus_action=state.spent_bonus_action,
@@ -1059,8 +1155,12 @@ def main():
                 )
             
             if not player.is_alive():
+                for update in keep_state.advance_raid_day(wave_number=wave, survived=False):
+                    print(update)
                 print(f"Game Over! Survived {wave - 1} waves.")
                 break
+            for update in keep_state.advance_raid_day(wave_number=wave, survived=True):
+                print(update)
         else:
             print(f"Victory! Survived all {args.waves} waves.")
     
