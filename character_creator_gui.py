@@ -7,11 +7,15 @@ from class_definitions import generate_level_1_stats, get_default_ability_scores
 from character_creation_data import (
     ABILITY_CODES,
     ALL_SKILLS,
+    class_has_weapon_mastery,
+    class_is_weapon_proficient,
+    get_class_weapon_mastery_count,
+    get_class_skill_selection,
+    get_class_tool_selection,
     ORIGIN_FEAT_OPTIONS,
     SPECIES_SPEED_FEET,
     SPECIES_OPTIONS,
     SPECIES_TRAIT_CHOICES,
-    TOOL_PROFICIENCY_OPTIONS,
     point_buy_delta,
 )
 from presets import build_character_from_preset, load_presets, save_preset, delete_preset
@@ -85,12 +89,12 @@ class CharacterCreatorGUI:
         self.font_medium = pygame.font.Font(None, 24)
         self.font_small = pygame.font.Font(None, 18)
         
-        self.screen_state = "class_select"  # "class_select", "name_input", "point_buy", "origin_asi", "origin_feat_select", "skill_select", "tool_select", "spell_select", "species_select", "species_trait_select", "species_bonus_select", "equipment_select", "review"
+        self.screen_state = "class_select"  # "class_select", "name_input", "point_buy", "origin_asi", "origin_feat_select", "skill_select", "tool_select", "spell_select", "weapon_select", "armor_select", "mastery_select", "fighting_style_select", "expertise_select", "species_select", "species_trait_select", "species_bonus_select", "review"
         self.selected_class: Optional[str] = None
         self.character_name = "Hero"
         self.running = True
         self.character: Optional[Character] = None
-        self.ability_scores = None
+        self.ability_scores = {"STR": 8, "DEX": 8, "CON": 8, "INT": 8, "WIS": 8, "CHA": 8}
         self.point_buy_points = 27
         self.origin_asi_choice: Optional[str] = None  # "2_1" or "1_1_1"
         self.origin_asi_selected = []
@@ -99,7 +103,9 @@ class CharacterCreatorGUI:
         self.selected_skills = []
         self.skill_options = []
         self.skill_needed = 0
-        self.selected_tool: Optional[str] = None
+        self.selected_tools = []
+        self.tool_options = []
+        self.tool_needed = 0
         self.selected_species: Optional[str] = None
         self.species_traits = {}
         self.species_trait_keys = []
@@ -120,6 +126,20 @@ class CharacterCreatorGUI:
         self.selected_armor = None
         self.available_weapons = []
         self.available_armor = []
+        self.mastery_needed = 0
+        self.selected_weapon_masteries = []
+        self.mastery_options = []
+        self.mastery_buttons = {}
+        self.mastery_page = 0
+        self.mastery_page_size = 12
+        # Fighting Style selection (Fighter lv1)
+        self.selected_fighting_style: Optional[str] = None
+        self.fighting_style_buttons: dict[str, Button] = {}
+        self.fighting_style_continue_button = Button(600, 520, 140, 40, "Continue")
+        # Expertise selection (Rogue lv1)
+        self.selected_expertise: list[str] = []
+        self.expertise_buttons: dict[str, Button] = {}
+        self.expertise_continue_button = Button(600, 520, 140, 40, "Continue")
         
         # UI elements
         self.class_buttons = {}
@@ -150,11 +170,23 @@ class CharacterCreatorGUI:
         self.species_bonus_continue_button = Button(600, 520, 140, 40, "Continue")
         self.weapon_buttons = {}
         self.armor_buttons = {}
+        self.weapon_page = 0
+        self.armor_page = 0
+        self.weapon_page_size = 10
+        self.armor_page_size = 8
+        self.weapon_prev_button = Button(20, 285, 120, 30, "Weapons <")
+        self.weapon_next_button = Button(160, 285, 120, 30, "Weapons >")
+        self.armor_prev_button = Button(20, 490, 120, 30, "Armor <")
+        self.armor_next_button = Button(160, 490, 120, 30, "Armor >")
+        self.armor_back_button = Button(300, 520, 120, 40, "Back")
+        self.mastery_prev_button = Button(20, 500, 120, 30, "Mastery <")
+        self.mastery_next_button = Button(160, 500, 120, 30, "Mastery >")
+        self.mastery_continue_button = Button(600, 520, 140, 40, "Continue")
         self.equipment_continue_button = Button(600, 520, 140, 40, "Continue")
         
         self.name_input_text = ""
         self.confirm_button = Button(300, 540, 200, 50, "Start Battle")
-        self.save_preset_button = Button(60, 540, 180, 50, "Save Preset")
+        self.save_preset_button = Button(520, 540, 180, 50, "Save Preset")
         
     def _create_class_buttons(self):
         """Create buttons for each class."""
@@ -210,7 +242,8 @@ class CharacterCreatorGUI:
 
     def _init_species_traits(self):
         self.species_traits = {}
-        self.species_trait_keys = list(SPECIES_TRAIT_CHOICES.get(self.selected_species, {}).keys())
+        species_key = self.selected_species or ""
+        self.species_trait_keys = list(SPECIES_TRAIT_CHOICES.get(species_key, {}).keys())
         self.species_trait_index = 0
         self._create_species_trait_buttons()
 
@@ -219,7 +252,7 @@ class CharacterCreatorGUI:
         if not self.selected_species or self.species_trait_index >= len(self.species_trait_keys):
             return
         trait_key = self.species_trait_keys[self.species_trait_index]
-        options = SPECIES_TRAIT_CHOICES.get(self.selected_species, {}).get(trait_key, [])
+        options = SPECIES_TRAIT_CHOICES.get(self.selected_species or "", {}).get(trait_key, [])
 
         cols = 2
         btn_width = 320
@@ -258,6 +291,7 @@ class CharacterCreatorGUI:
         self.bonus_skill = None
         self.species_bonus_feat_buttons = {}
         self.species_bonus_skill_buttons = {}
+        feat_section_bottom = 120
 
         need_human_feat = self.selected_species == "Human"
         need_human_skill = self.selected_species == "Human"
@@ -279,6 +313,10 @@ class CharacterCreatorGUI:
                 y = start_y + row * spacing_y
                 self.species_bonus_feat_buttons[feat] = Button(x, y, btn_width, btn_height, feat)
 
+            if feat_options:
+                last_row = (len(feat_options) - 1) // cols
+                feat_section_bottom = start_y + (last_row * spacing_y) + btn_height
+
         skill_pool = []
         if need_human_skill:
             skill_pool = [skill for skill in ALL_SKILLS if skill not in self.selected_skills]
@@ -287,13 +325,22 @@ class CharacterCreatorGUI:
             skill_pool = [skill for skill in elf_skill_options if skill not in self.selected_skills]
 
         if skill_pool:
-            cols = 3
-            btn_width = 220
-            btn_height = 30
-            start_x = 40
-            start_y = 300 if need_human_feat else 200
-            spacing_x = 245
-            spacing_y = 34
+            if need_human_feat:
+                cols = 5
+                btn_width = 140
+                btn_height = 28
+                start_x = 20
+                start_y = feat_section_bottom + 50
+                spacing_x = 150
+                spacing_y = 32
+            else:
+                cols = 3
+                btn_width = 220
+                btn_height = 30
+                start_x = 40
+                start_y = 200
+                spacing_x = 245
+                spacing_y = 34
             self.species_bonus_skill_title_y = start_y - 36
             for i, skill in enumerate(skill_pool):
                 row = i // cols
@@ -316,36 +363,183 @@ class CharacterCreatorGUI:
         self.equipment_spent = 0
         self.selected_weapon = None
         self.selected_armor = None
-        self.weapon_buttons = {}
-        self.armor_buttons = {}
+        self.weapon_page = 0
+        self.armor_page = 0
         
         # All weapons available (in real game, filter by proficiency)
-        self.available_weapons = [name for name in WEAPONS.keys()]
-        self.available_armor = [name for name in ARMOR.keys()]
-        
+        self.available_weapons = sorted([name for name in WEAPONS.keys()])
+        self.available_armor = sorted([name for name in ARMOR.keys()])
+        self._build_weapon_page_buttons()
+        self._build_armor_page_buttons()
+
+    def _build_weapon_page_buttons(self):
+        self.weapon_buttons = {}
+
         # Create weapon buttons
         cols = 2
         btn_width = 320
         btn_height = 28
         start_x = 40
-        start_y = 100
+        start_y = 120
         spacing_x = 340
         spacing_y = 35
-        for i, weapon_name in enumerate(self.available_weapons):
+        weapon_start = self.weapon_page * self.weapon_page_size
+        weapon_slice = self.available_weapons[weapon_start: weapon_start + self.weapon_page_size]
+        for i, weapon_name in enumerate(weapon_slice):
             row = i // cols
             col = i % cols
             x = start_x + col * spacing_x
             y = start_y + row * spacing_y
-            self.weapon_buttons[weapon_name] = Button(x, y, btn_width, btn_height, weapon_name)
-        
-        # Create armor buttons
-        start_y = 350
-        for i, armor_name in enumerate(self.available_armor):
+            btn = Button(x, y, btn_width, btn_height, weapon_name)
+            btn.active = self.selected_weapon == weapon_name
+            self.weapon_buttons[weapon_name] = btn
+
+    def _build_armor_page_buttons(self):
+        self.armor_buttons = {}
+
+        cols = 2
+        btn_width = 320
+        btn_height = 28
+        start_x = 40
+        start_y = 120
+        spacing_x = 340
+        spacing_y = 35
+        armor_start = self.armor_page * self.armor_page_size
+        armor_slice = self.available_armor[armor_start: armor_start + self.armor_page_size]
+        for i, armor_name in enumerate(armor_slice):
             row = i // cols
             col = i % cols
             x = start_x + col * spacing_x
             y = start_y + row * spacing_y
-            self.armor_buttons[armor_name] = Button(x, y, btn_width, btn_height, armor_name)
+            btn = Button(x, y, btn_width, btn_height, armor_name)
+            btn.active = self.selected_armor == armor_name
+            self.armor_buttons[armor_name] = btn
+
+    def _recalculate_equipment_spent(self):
+        from items import WEAPONS, ARMOR
+
+        total = 0
+        if self.selected_weapon:
+            total += WEAPONS[self.selected_weapon].value
+        if self.selected_armor:
+            total += ARMOR[self.selected_armor].value
+        self.equipment_spent = total
+
+    def _toggle_weapon_selection(self, weapon_name: str):
+        if self.selected_weapon == weapon_name:
+            self.selected_weapon = None
+        else:
+            self.selected_weapon = weapon_name
+        self._recalculate_equipment_spent()
+        self._build_weapon_page_buttons()
+
+    def _toggle_armor_selection(self, armor_name: str):
+        if self.selected_armor == armor_name:
+            self.selected_armor = None
+        else:
+            self.selected_armor = armor_name
+        self._recalculate_equipment_spent()
+        self._build_armor_page_buttons()
+
+    def _init_mastery_select(self):
+        from items import WEAPONS
+
+        self.mastery_needed = get_class_weapon_mastery_count(self.selected_class or "")
+        self.selected_weapon_masteries = []
+        self.mastery_options = [
+            weapon_name
+            for weapon_name, weapon in sorted(WEAPONS.items())
+            if class_is_weapon_proficient(self.selected_class or "", weapon_name, weapon)
+        ]
+        self.mastery_page = 0
+        self._build_mastery_page_buttons()
+
+    def _build_mastery_page_buttons(self):
+        self.mastery_buttons = {}
+        cols = 2
+        btn_width = 320
+        btn_height = 28
+        start_x = 40
+        start_y = 120
+        spacing_x = 340
+        spacing_y = 32
+        start = self.mastery_page * self.mastery_page_size
+        options = self.mastery_options[start: start + self.mastery_page_size]
+        for i, weapon_name in enumerate(options):
+            row = i // cols
+            col = i % cols
+            x = start_x + col * spacing_x
+            y = start_y + row * spacing_y
+            btn = Button(x, y, btn_width, btn_height, weapon_name)
+            btn.active = weapon_name in self.selected_weapon_masteries
+            self.mastery_buttons[weapon_name] = btn
+
+    def _toggle_mastery(self, weapon_name: str):
+        if weapon_name in self.selected_weapon_masteries:
+            self.selected_weapon_masteries.remove(weapon_name)
+            if weapon_name in self.mastery_buttons:
+                self.mastery_buttons[weapon_name].active = False
+            return
+        if len(self.selected_weapon_masteries) >= self.mastery_needed:
+            return
+        self.selected_weapon_masteries.append(weapon_name)
+        if weapon_name in self.mastery_buttons:
+            self.mastery_buttons[weapon_name].active = True
+
+    def _mastery_selection_valid(self) -> bool:
+        return len(self.selected_weapon_masteries) == self.mastery_needed
+
+    def _init_fighting_style_select(self):
+        """Initialize fighting style selection screen for Fighter."""
+        FIGHTING_STYLES = {
+            "Archery": "+2 bonus to attack rolls with Ranged weapons",
+            "Defense": "+1 AC while wearing armor",
+            "Great Weapon Fighting": "Reroll 1s and 2s on damage dice (Two-Handed/Versatile)",
+            "Two-Weapon Fighting": "Add ability modifier to offhand attack damage",
+        }
+        self.selected_fighting_style = None
+        self.fighting_style_buttons = {}
+        start_y = 140
+        for i, (style_name, desc) in enumerate(FIGHTING_STYLES.items()):
+            btn = Button(40, start_y + i * 70, 700, 50, f"{style_name}: {desc}")
+            self.fighting_style_buttons[style_name] = btn
+
+    def _init_expertise_select(self):
+        """Initialize expertise skill selection for Rogue (pick 2 from proficient skills)."""
+        self.selected_expertise = []
+        self.expertise_buttons = {}
+        skills = self.selected_skills[:]
+        if not skills:
+            skills = ["Stealth", "Perception"]
+        cols = 2
+        btn_w = 300
+        btn_h = 34
+        start_x = 60
+        start_y = 140
+        spacing_x = 340
+        spacing_y = 42
+        for i, skill_name in enumerate(sorted(skills)):
+            row = i // cols
+            col = i % cols
+            x = start_x + col * spacing_x
+            y = start_y + row * spacing_y
+            self.expertise_buttons[skill_name] = Button(x, y, btn_w, btn_h, skill_name)
+
+    def _continue_after_class_features(self):
+        """Transition past class-specific feature screens to species selection."""
+        self.screen_state = "species_select"
+
+    def _advance_to_class_feature_screen(self):
+        """Route to the correct class-specific screen after equipment/mastery."""
+        cls = (self.selected_class or "").strip()
+        if cls == "Fighter":
+            self._init_fighting_style_select()
+            self.screen_state = "fighting_style_select"
+        elif cls == "Rogue":
+            self._init_expertise_select()
+            self.screen_state = "expertise_select"
+        else:
+            self.screen_state = "species_select"
 
     def _origin_asi_is_valid(self) -> bool:
         if self.origin_asi_choice == "2_1":
@@ -396,9 +590,21 @@ class CharacterCreatorGUI:
         self.point_buy_points = 27 - total_cost
 
     def _init_skill_select(self):
-        self.skill_options = ALL_SKILLS
-        self.skill_needed = 2
+        self.skill_options, self.skill_needed = get_class_skill_selection(self.selected_class or "")
         self.selected_skills = []
+
+        # Skilled feat grants 3 additional skill proficiency picks
+        skilled_count = sum(1 for f in [self.selected_origin_feat,
+                                        getattr(self, "bonus_origin_feat", None)]
+                           if f == "Skilled")
+        if skilled_count:
+            self.skill_needed += 3 * skilled_count
+            # Expand options to all skills so Skilled users have full choice
+            from character_creation_data import ALL_SKILLS
+            for skill in ALL_SKILLS:
+                if skill not in self.skill_options:
+                    self.skill_options.append(skill)
+
         self.skill_buttons = {}
 
         cols = 3
@@ -416,8 +622,27 @@ class CharacterCreatorGUI:
             self.skill_buttons[skill] = Button(x, y, btn_width, btn_height, skill)
 
     def _init_tool_select(self):
-        self.selected_tool = None
+        self.tool_options, self.tool_needed = get_class_tool_selection(self.selected_class or "")
+        self.selected_tools = []
+
+        # Crafty feat grants 3 additional tool proficiency picks
+        has_crafty = (self.selected_origin_feat == "Crafty" or
+                      getattr(self, "bonus_origin_feat", None) == "Crafty")
+        if has_crafty:
+            self.tool_needed += 3
+            # Expand options to all tools so Crafty users have full choice
+            from character_creation_data import TOOL_PROFICIENCY_OPTIONS
+            for tool in TOOL_PROFICIENCY_OPTIONS:
+                if tool not in self.tool_options:
+                    self.tool_options.append(tool)
+
+        if self.tool_needed == 1 and len(self.tool_options) == 1:
+            self.selected_tools = [self.tool_options[0]]
+
         self.tool_buttons = {}
+        if self.tool_needed <= 0 or (self.tool_needed == 1 and len(self.tool_options) == 1):
+            return
+
         cols = 3
         btn_width = 230
         btn_height = 24
@@ -425,12 +650,45 @@ class CharacterCreatorGUI:
         start_y = 120
         spacing_x = 250
         spacing_y = 30
-        for i, tool in enumerate(TOOL_PROFICIENCY_OPTIONS):
+        for i, tool in enumerate(self.tool_options):
             row = i // cols
             col = i % cols
             x = start_x + col * spacing_x
             y = start_y + row * spacing_y
             self.tool_buttons[tool] = Button(x, y, btn_width, btn_height, tool)
+
+    def _continue_after_tool_selection(self):
+        if self.selected_class and is_spellcaster_class(self.selected_class):
+            self._init_spell_select()
+            self.screen_state = "spell_select"
+        else:
+            self._init_equipment_select()
+            self.screen_state = "weapon_select"
+
+    def _toggle_tool(self, tool_name: str):
+        if tool_name in self.selected_tools:
+            self.selected_tools.remove(tool_name)
+            self.tool_buttons[tool_name].active = False
+            return
+        if len(self.selected_tools) >= self.tool_needed:
+            return
+        self.selected_tools.append(tool_name)
+        self.tool_buttons[tool_name].active = True
+
+    def _origin_asi_preview_scores(self) -> dict:
+        scores = dict(self.ability_scores or {})
+        if not self.origin_asi_choice:
+            return scores
+
+        if self.origin_asi_choice == "2_1":
+            if self.origin_asi_primary:
+                scores[self.origin_asi_primary] = min(20, scores.get(self.origin_asi_primary, 8) + 2)
+            if self.origin_asi_secondary:
+                scores[self.origin_asi_secondary] = min(20, scores.get(self.origin_asi_secondary, 8) + 1)
+        elif self.origin_asi_choice == "1_1_1":
+            for ability in self.origin_asi_selected:
+                scores[ability] = min(20, scores.get(ability, 8) + 1)
+        return scores
 
     def _init_spell_select(self):
         self.selected_spells = []
@@ -544,6 +802,33 @@ class CharacterCreatorGUI:
             for btn in self.spell_buttons.values():
                 btn.update_hover(mouse_pos)
             self.spell_continue_button.update_hover(mouse_pos)
+        elif self.screen_state == "weapon_select":
+            for btn in self.weapon_buttons.values():
+                btn.update_hover(mouse_pos)
+            self.weapon_prev_button.update_hover(mouse_pos)
+            self.weapon_next_button.update_hover(mouse_pos)
+            self.equipment_continue_button.update_hover(mouse_pos)
+        elif self.screen_state == "armor_select":
+            for btn in self.armor_buttons.values():
+                btn.update_hover(mouse_pos)
+            self.armor_prev_button.update_hover(mouse_pos)
+            self.armor_next_button.update_hover(mouse_pos)
+            self.armor_back_button.update_hover(mouse_pos)
+            self.equipment_continue_button.update_hover(mouse_pos)
+        elif self.screen_state == "mastery_select":
+            for btn in self.mastery_buttons.values():
+                btn.update_hover(mouse_pos)
+            self.mastery_prev_button.update_hover(mouse_pos)
+            self.mastery_next_button.update_hover(mouse_pos)
+            self.mastery_continue_button.update_hover(mouse_pos)
+        elif self.screen_state == "fighting_style_select":
+            for btn in self.fighting_style_buttons.values():
+                btn.update_hover(mouse_pos)
+            self.fighting_style_continue_button.update_hover(mouse_pos)
+        elif self.screen_state == "expertise_select":
+            for btn in self.expertise_buttons.values():
+                btn.update_hover(mouse_pos)
+            self.expertise_continue_button.update_hover(mouse_pos)
         elif self.screen_state == "origin_feat_select":
             for btn in self.origin_feat_buttons.values():
                 btn.update_hover(mouse_pos)
@@ -720,25 +1005,20 @@ class CharacterCreatorGUI:
                         if self.skill_continue_button.is_clicked(mouse_pos):
                             if len(self.selected_skills) == self.skill_needed:
                                 self._init_tool_select()
-                                self.screen_state = "tool_select"
+                                if self.tool_needed <= 0 or (self.tool_needed == 1 and len(self.tool_options) == 1):
+                                    self._continue_after_tool_selection()
+                                else:
+                                    self.screen_state = "tool_select"
                                 return True
 
                     elif self.screen_state == "tool_select":
                         for tool_name, btn in self.tool_buttons.items():
                             if btn.is_clicked(mouse_pos):
-                                self.selected_tool = tool_name
-                                for other_btn in self.tool_buttons.values():
-                                    other_btn.active = False
-                                btn.active = True
+                                self._toggle_tool(tool_name)
                                 return True
                         if self.tool_continue_button.is_clicked(mouse_pos):
-                            if self.selected_tool:
-                                if self.selected_class and is_spellcaster_class(self.selected_class):
-                                    self._init_spell_select()
-                                    self.screen_state = "spell_select"
-                                else:
-                                    self._init_equipment_select()
-                                    self.screen_state = "equipment_select"
+                            if len(self.selected_tools) == self.tool_needed:
+                                self._continue_after_tool_selection()
                                 return True
 
                     elif self.screen_state == "spell_select":
@@ -749,59 +1029,113 @@ class CharacterCreatorGUI:
                         if self.spell_continue_button.is_clicked(mouse_pos):
                             if self._spell_selection_is_valid():
                                 self._init_equipment_select()
-                                self.screen_state = "equipment_select"
+                                self.screen_state = "weapon_select"
                                 return True
                     
-                    elif self.screen_state == "equipment_select":
-                        # Handle weapon button clicks
+                    elif self.screen_state == "weapon_select":
+                        if self.weapon_prev_button.is_clicked(mouse_pos):
+                            if self.weapon_page > 0:
+                                self.weapon_page -= 1
+                                self._build_weapon_page_buttons()
+                            return True
+                        if self.weapon_next_button.is_clicked(mouse_pos):
+                            max_weapon_page = max(0, (len(self.available_weapons) - 1) // self.weapon_page_size)
+                            if self.weapon_page < max_weapon_page:
+                                self.weapon_page += 1
+                                self._build_weapon_page_buttons()
+                            return True
+
                         for weapon_name, btn in self.weapon_buttons.items():
                             if btn.is_clicked(mouse_pos):
-                                # Toggle deselection if clicking already selected weapon
-                                if self.selected_weapon == weapon_name:
-                                    self.selected_weapon = None
-                                    btn.active = False
-                                    self.equipment_spent = 0
-                                    if self.selected_armor:
-                                        from items import ARMOR
-                                        self.equipment_spent = ARMOR[self.selected_armor].value
-                                else:
-                                    self.selected_weapon = weapon_name
-                                    for other_btn in self.weapon_buttons.values():
-                                        other_btn.active = False
-                                    btn.active = True
-                                    # Check budget and update spent amount
-                                    from items import WEAPONS, ARMOR
-                                    cost = WEAPONS[weapon_name].value
-                                    armor_cost = ARMOR[self.selected_armor].value if self.selected_armor else 0
-                                    self.equipment_spent = cost + armor_cost
+                                self._toggle_weapon_selection(weapon_name)
                                 return True
-                        
-                        # Handle armor button clicks
+
+                        if self.equipment_continue_button.is_clicked(mouse_pos):
+                            self._build_armor_page_buttons()
+                            self.screen_state = "armor_select"
+                            return True
+
+                    elif self.screen_state == "armor_select":
+                        if self.armor_prev_button.is_clicked(mouse_pos):
+                            if self.armor_page > 0:
+                                self.armor_page -= 1
+                                self._build_armor_page_buttons()
+                            return True
+                        if self.armor_next_button.is_clicked(mouse_pos):
+                            max_armor_page = max(0, (len(self.available_armor) - 1) // self.armor_page_size)
+                            if self.armor_page < max_armor_page:
+                                self.armor_page += 1
+                                self._build_armor_page_buttons()
+                            return True
+                        if self.armor_back_button.is_clicked(mouse_pos):
+                            self._build_weapon_page_buttons()
+                            self.screen_state = "weapon_select"
+                            return True
+
                         for armor_name, btn in self.armor_buttons.items():
                             if btn.is_clicked(mouse_pos):
-                                # Toggle deselection if clicking already selected armor
-                                if self.selected_armor == armor_name:
-                                    self.selected_armor = None
-                                    btn.active = False
-                                    self.equipment_spent = 0
-                                    if self.selected_weapon:
-                                        from items import WEAPONS
-                                        self.equipment_spent = WEAPONS[self.selected_weapon].value
-                                else:
-                                    self.selected_armor = armor_name
-                                    for other_btn in self.armor_buttons.values():
-                                        other_btn.active = False
-                                    btn.active = True
-                                    # Check budget and update spent amount
-                                    from items import ARMOR, WEAPONS
-                                    armor_cost = ARMOR[armor_name].value
-                                    weapon_cost = WEAPONS[self.selected_weapon].value if self.selected_weapon else 0
-                                    self.equipment_spent = armor_cost + weapon_cost
+                                self._toggle_armor_selection(armor_name)
                                 return True
-                        
-                        # Continue to next stage (equipment is optional)
+
                         if self.equipment_continue_button.is_clicked(mouse_pos):
                             if self.equipment_spent <= self.equipment_budget:
+                                if class_has_weapon_mastery(self.selected_class or ""):
+                                    self._init_mastery_select()
+                                    self.screen_state = "mastery_select"
+                                else:
+                                    self._advance_to_class_feature_screen()
+                                return True
+
+                    elif self.screen_state == "mastery_select":
+                        if self.mastery_prev_button.is_clicked(mouse_pos):
+                            if self.mastery_page > 0:
+                                self.mastery_page -= 1
+                                self._build_mastery_page_buttons()
+                            return True
+                        if self.mastery_next_button.is_clicked(mouse_pos):
+                            max_page = max(0, (len(self.mastery_options) - 1) // self.mastery_page_size)
+                            if self.mastery_page < max_page:
+                                self.mastery_page += 1
+                                self._build_mastery_page_buttons()
+                            return True
+                        for weapon_name, btn in self.mastery_buttons.items():
+                            if btn.is_clicked(mouse_pos):
+                                self._toggle_mastery(weapon_name)
+                                return True
+                        if self.mastery_continue_button.is_clicked(mouse_pos):
+                            if self._mastery_selection_valid():
+                                self._advance_to_class_feature_screen()
+                                return True
+
+                    elif self.screen_state == "fighting_style_select":
+                        for style_name, btn in self.fighting_style_buttons.items():
+                            if btn.is_clicked(mouse_pos):
+                                self.selected_fighting_style = style_name
+                                for other_btn in self.fighting_style_buttons.values():
+                                    other_btn.active = False
+                                btn.active = True
+                                return True
+                        if self.fighting_style_continue_button.is_clicked(mouse_pos):
+                            if self.selected_fighting_style:
+                                if (self.selected_class or "").strip() == "Rogue":
+                                    self._init_expertise_select()
+                                    self.screen_state = "expertise_select"
+                                else:
+                                    self.screen_state = "species_select"
+                                return True
+
+                    elif self.screen_state == "expertise_select":
+                        for skill_name, btn in self.expertise_buttons.items():
+                            if btn.is_clicked(mouse_pos):
+                                if skill_name in self.selected_expertise:
+                                    self.selected_expertise.remove(skill_name)
+                                    btn.active = False
+                                elif len(self.selected_expertise) < 2:
+                                    self.selected_expertise.append(skill_name)
+                                    btn.active = True
+                                return True
+                        if self.expertise_continue_button.is_clicked(mouse_pos):
+                            if len(self.selected_expertise) == 2:
                                 self.screen_state = "species_select"
                                 return True
                     
@@ -875,12 +1209,12 @@ class CharacterCreatorGUI:
         origin_feats = [self.selected_origin_feat] if self.selected_origin_feat else []
         if self.bonus_origin_feat:
             origin_feats.append(self.bonus_origin_feat)
-        tool_proficiencies = [self.selected_tool] if self.selected_tool else []
+        tool_proficiencies = list(self.selected_tools)
         final_skills = list(self.selected_skills)
         if self.bonus_skill and self.bonus_skill not in final_skills:
             final_skills.append(self.bonus_skill)
 
-        speed_ft = SPECIES_SPEED_FEET.get(self.selected_species, 30)
+        speed_ft = SPECIES_SPEED_FEET.get(self.selected_species or "", 30)
 
         self.character = Character(
             self.name_input_text or "Hero",
@@ -900,8 +1234,11 @@ class CharacterCreatorGUI:
             origin_feats=origin_feats,
             speed_ft=speed_ft,
             tool_proficiencies=tool_proficiencies,
+            weapon_masteries=list(self.selected_weapon_masteries),
             spells=self.selected_spells,
             gold=100,
+            fighting_style=self.selected_fighting_style,
+            expertise_skills=list(self.selected_expertise),
         )
         
         # Equip selected items
@@ -922,11 +1259,14 @@ class CharacterCreatorGUI:
             "ability_scores": self.ability_scores or get_default_ability_scores(self.selected_class),
             "origin_feats": ([self.selected_origin_feat] if self.selected_origin_feat else []) + ([self.bonus_origin_feat] if self.bonus_origin_feat else []),
             "skill_proficiencies": list(self.selected_skills) + ([self.bonus_skill] if self.bonus_skill else []),
-            "tool_proficiencies": [self.selected_tool] if self.selected_tool else [],
+            "tool_proficiencies": list(self.selected_tools),
+            "weapon_masteries": list(self.selected_weapon_masteries),
             "species": self.selected_species,
             "species_traits": dict(self.species_traits),
             "spells": list(self.selected_spells),
             "gold": 100,
+            "fighting_style": self.selected_fighting_style,
+            "expertise_skills": list(self.selected_expertise),
         }
         save_preset(preset)
         self.saved_preset_name = preset["name"]
@@ -1018,11 +1358,20 @@ class CharacterCreatorGUI:
 
         selected_text = ", ".join(self.origin_asi_selected) if self.origin_asi_selected else "None"
         selected_line = self.font_small.render(f"Selected: {selected_text}", True, COLOR_TEXT)
-        self.screen.blit(selected_line, (40, 470))
+        self.screen.blit(selected_line, (40, 432))
+
+        current_scores = self.ability_scores or {ability: 8 for ability in ABILITY_CODES}
+        preview_scores = self._origin_asi_preview_scores()
+        current_text = " ".join([f"{ability}:{current_scores.get(ability, 8)}" for ability in ABILITY_CODES])
+        preview_text = " ".join([f"{ability}:{preview_scores.get(ability, 8)}" for ability in ABILITY_CODES])
+        current_line = self.font_small.render(f"Current: {current_text}", True, COLOR_TEXT)
+        preview_line = self.font_small.render(f"After:   {preview_text}", True, COLOR_TEXT_SELECTED)
+        self.screen.blit(current_line, (40, 455))
+        self.screen.blit(preview_line, (40, 477))
 
         if self.origin_asi_choice and not self._origin_asi_is_valid():
             error = self.font_small.render("Select three abilities and assign bonuses", True, (255, 100, 100))
-            self.screen.blit(error, (40, 495))
+            self.screen.blit(error, (40, 500))
 
         self.origin_asi_reset_button.draw(self.screen, self.font_medium)
         self.origin_asi_continue_button.draw(self.screen, self.font_medium)
@@ -1101,13 +1450,13 @@ class CharacterCreatorGUI:
         self.skill_continue_button.draw(self.screen, self.font_medium)
 
     def draw_tool_select(self):
-        title = self.font_large.render("Choose Tool Proficiency", True, COLOR_TEXT)
+        title = self.font_large.render(f"Choose {self.tool_needed} Tool Proficiencies", True, COLOR_TEXT)
         self.screen.blit(title, (self.width // 2 - title.get_width() // 2, 20))
 
         for btn in self.tool_buttons.values():
             btn.draw(self.screen, self.font_small)
 
-        selected_text = self.selected_tool or "None"
+        selected_text = ", ".join(self.selected_tools) if self.selected_tools else "None"
         selected_line = self.font_small.render(f"Selected: {selected_text}", True, COLOR_TEXT)
         self.screen.blit(selected_line, (40, 470))
 
@@ -1169,6 +1518,37 @@ class CharacterCreatorGUI:
         
         for btn in self.weapon_buttons.values():
             btn.draw(self.screen, self.font_small)
+        weapon_page_count = max(1, (len(self.available_weapons) + self.weapon_page_size - 1) // self.weapon_page_size)
+        weapon_page_label = self.font_small.render(f"Page {self.weapon_page + 1}/{weapon_page_count}", True, COLOR_TEXT)
+        self.screen.blit(weapon_page_label, (300, 288))
+        self.weapon_prev_button.draw(self.screen, self.font_small)
+        self.weapon_next_button.draw(self.screen, self.font_small)
+
+        focused_weapon_name = None
+        mouse_pos = pygame.mouse.get_pos()
+        for weapon_name, btn in self.weapon_buttons.items():
+            if btn.rect.collidepoint(mouse_pos):
+                focused_weapon_name = weapon_name
+                break
+        if focused_weapon_name is None:
+            focused_weapon_name = self.selected_weapon
+
+        if focused_weapon_name and focused_weapon_name in WEAPONS:
+            weapon = WEAPONS[focused_weapon_name]
+            weapon_detail_title = self.font_small.render(f"Weapon Focus: {focused_weapon_name}", True, COLOR_TEXT_SELECTED)
+            weapon_damage = f"Damage: {weapon.dmg_num}d{weapon.dmg_die} {getattr(weapon, 'damage_type', 'physical')}"
+            if getattr(weapon, "versatile_dmg_die", None):
+                weapon_damage += f" (versatile 1d{weapon.versatile_dmg_die})"
+            weapon_mastery = str(getattr(weapon, "mastery", "")) or "None"
+            weapon_properties = ", ".join(getattr(weapon, "properties", [])) or "None"
+            weapon_range = f"Range: {getattr(weapon, 'range_normal_ft', 5)}/{getattr(weapon, 'range_long_ft', 5)} ft"
+            weapon_prof = f"Proficiency: {getattr(weapon, 'proficiency_type', 'Unknown')}"
+            self.screen.blit(weapon_detail_title, (20, 306))
+            self.screen.blit(self.font_small.render(weapon_damage, True, COLOR_TEXT), (20, 324))
+            self.screen.blit(self.font_small.render(f"Mastery: {weapon_mastery}", True, COLOR_TEXT), (20, 342))
+            self.screen.blit(self.font_small.render(f"Properties: {weapon_properties}", True, COLOR_TEXT), (20, 360))
+            self.screen.blit(self.font_small.render(weapon_range, True, COLOR_TEXT), (20, 378))
+            self.screen.blit(self.font_small.render(weapon_prof, True, COLOR_TEXT), (20, 396))
         
         # Armor section
         armor_label = self.font_medium.render("Armor (Optional):", True, COLOR_TEXT_SELECTED)
@@ -1176,25 +1556,339 @@ class CharacterCreatorGUI:
         
         for btn in self.armor_buttons.values():
             btn.draw(self.screen, self.font_small)
+        armor_page_count = max(1, (len(self.available_armor) + self.armor_page_size - 1) // self.armor_page_size)
+        armor_page_label = self.font_small.render(f"Page {self.armor_page + 1}/{armor_page_count}", True, COLOR_TEXT)
+        self.screen.blit(armor_page_label, (300, 493))
+        self.armor_prev_button.draw(self.screen, self.font_small)
+        self.armor_next_button.draw(self.screen, self.font_small)
+
+        focused_armor_name = None
+        for armor_name, btn in self.armor_buttons.items():
+            if btn.rect.collidepoint(mouse_pos):
+                focused_armor_name = armor_name
+                break
+        if focused_armor_name is None:
+            focused_armor_name = self.selected_armor
+
+        if focused_armor_name and focused_armor_name in ARMOR:
+            armor = ARMOR[focused_armor_name]
+            armor_detail_title = self.font_small.render(f"Armor Focus: {focused_armor_name}", True, COLOR_TEXT_SELECTED)
+            armor_ac = f"AC: {armor.ac_base}" + (" + DEX" if armor.ac_bonus_dex else "")
+            if armor.max_dex is not None and armor.ac_bonus_dex:
+                armor_ac += f" (max +{armor.max_dex})"
+            armor_prof = f"Training: {armor.proficiency_type}"
+            armor_stealth = "Stealth: Disadvantage" if getattr(armor, "stealth_disadvantage", False) else "Stealth: Normal"
+            str_req = getattr(armor, "strength_requirement", None)
+            armor_req = f"Strength Req: {str_req}" if str_req else "Strength Req: None"
+            self.screen.blit(armor_detail_title, (420, 500))
+            self.screen.blit(self.font_small.render(armor_ac, True, COLOR_TEXT), (420, 518))
+            self.screen.blit(self.font_small.render(armor_prof, True, COLOR_TEXT), (420, 536))
+            self.screen.blit(self.font_small.render(armor_stealth, True, COLOR_TEXT), (420, 554))
+            self.screen.blit(self.font_small.render(armor_req, True, COLOR_TEXT), (420, 572))
         
-        # Preview stats
-        preview_y = 480
-        preview_text = "Preview: "
+        # Preview stats (moved to top-right to avoid overlap with armor paging controls)
+        preview_title = self.font_small.render("Current Selection", True, COLOR_TEXT_SELECTED)
+        self.screen.blit(preview_title, (430, 46))
+
         if self.selected_weapon:
             weapon = WEAPONS[self.selected_weapon]
-            preview_text += f"{self.selected_weapon} ({weapon.dmg_num}d{weapon.dmg_die}+DEX) | "
+            proficiency_type = str(getattr(weapon, "proficiency_type", ""))
+            if "Ranged" in proficiency_type:
+                ability_label = "DEX"
+            elif bool(getattr(weapon, "finesse", False)):
+                str_score = (self.ability_scores or {}).get("STR", 10)
+                dex_score = (self.ability_scores or {}).get("DEX", 10)
+                ability_label = "STR" if str_score >= dex_score else "DEX"
+            else:
+                ability_label = "STR"
+            weapon_preview = f"Wpn: {self.selected_weapon} ({weapon.dmg_num}d{weapon.dmg_die}+{ability_label})"
+        else:
+            weapon_preview = "Wpn: None"
+
         if self.selected_armor:
             armor = ARMOR[self.selected_armor]
-            preview_text += f"AC: {armor.ac_base}"
+            armor_preview = f"AC: {armor.ac_base}"
             if armor.ac_bonus_dex:
-                preview_text += "+DEX"
+                armor_preview += "+DEX"
             if armor.max_dex is not None:
-                preview_text += f" (max +{armor.max_dex})"
-        
-        preview_line = self.font_small.render(preview_text or "No equipment selected (unarmed/unarmored)", True, COLOR_TEXT)
-        self.screen.blit(preview_line, (20, preview_y))
+                armor_preview += f" (max +{armor.max_dex})"
+        else:
+            armor_preview = "AC: Unarmored"
+
+        self.screen.blit(self.font_small.render(weapon_preview, True, COLOR_TEXT), (430, 64))
+        self.screen.blit(self.font_small.render(armor_preview, True, COLOR_TEXT), (430, 82))
         
         self.equipment_continue_button.draw(self.screen, self.font_medium)
+
+    def draw_weapon_select(self):
+        from items import WEAPONS, ARMOR
+
+        remaining = self.equipment_budget - self.equipment_spent
+        title = self.font_large.render("Choose Weapon (Optional)", True, COLOR_TEXT)
+        self.screen.blit(title, (self.width // 2 - title.get_width() // 2, 10))
+
+        budget_text = self.font_small.render(
+            f"Equipment Budget: {remaining}/{self.equipment_budget} gp remaining",
+            True,
+            COLOR_TEXT if remaining >= 0 else (255, 100, 100),
+        )
+        self.screen.blit(budget_text, (20, 45))
+
+        helper = self.font_small.render("Step 1/2: select your weapon, then continue to armor.", True, COLOR_TEXT_SELECTED)
+        self.screen.blit(helper, (20, 70))
+
+        for btn in self.weapon_buttons.values():
+            btn.draw(self.screen, self.font_small)
+
+        weapon_page_count = max(1, (len(self.available_weapons) + self.weapon_page_size - 1) // self.weapon_page_size)
+        weapon_page_label = self.font_small.render(f"Page {self.weapon_page + 1}/{weapon_page_count}", True, COLOR_TEXT)
+        self.screen.blit(weapon_page_label, (300, 503))
+        self.weapon_prev_button.draw(self.screen, self.font_small)
+        self.weapon_next_button.draw(self.screen, self.font_small)
+
+        focused_weapon_name = None
+        mouse_pos = pygame.mouse.get_pos()
+        for weapon_name, btn in self.weapon_buttons.items():
+            if btn.rect.collidepoint(mouse_pos):
+                focused_weapon_name = weapon_name
+                break
+        if focused_weapon_name is None:
+            focused_weapon_name = self.selected_weapon
+
+        if focused_weapon_name and focused_weapon_name in WEAPONS:
+            weapon = WEAPONS[focused_weapon_name]
+            weapon_detail_title = self.font_small.render(f"Weapon Focus: {focused_weapon_name}", True, COLOR_TEXT_SELECTED)
+            weapon_damage = f"Damage: {weapon.dmg_num}d{weapon.dmg_die} {getattr(weapon, 'damage_type', 'physical')}"
+            if getattr(weapon, "versatile_dmg_die", None):
+                weapon_damage += f" (versatile 1d{weapon.versatile_dmg_die})"
+            weapon_mastery = str(getattr(weapon, "mastery", "")) or "None"
+            weapon_properties = ", ".join(getattr(weapon, "properties", [])) or "None"
+            weapon_range = f"Range: {getattr(weapon, 'range_normal_ft', 5)}/{getattr(weapon, 'range_long_ft', 5)} ft"
+            weapon_prof = f"Proficiency: {getattr(weapon, 'proficiency_type', 'Unknown')}"
+            self.screen.blit(weapon_detail_title, (20, 330))
+            self.screen.blit(self.font_small.render(weapon_damage, True, COLOR_TEXT), (20, 350))
+            self.screen.blit(self.font_small.render(f"Mastery: {weapon_mastery}", True, COLOR_TEXT), (20, 370))
+            self.screen.blit(self.font_small.render(f"Properties: {weapon_properties}", True, COLOR_TEXT), (20, 390))
+            self.screen.blit(self.font_small.render(weapon_range, True, COLOR_TEXT), (20, 410))
+            self.screen.blit(self.font_small.render(weapon_prof, True, COLOR_TEXT), (20, 430))
+
+        preview_title = self.font_small.render("Current Selection", True, COLOR_TEXT_SELECTED)
+        self.screen.blit(preview_title, (430, 46))
+
+        if self.selected_weapon:
+            weapon = WEAPONS[self.selected_weapon]
+            proficiency_type = str(getattr(weapon, "proficiency_type", ""))
+            if "Ranged" in proficiency_type:
+                ability_label = "DEX"
+            elif bool(getattr(weapon, "finesse", False)):
+                str_score = (self.ability_scores or {}).get("STR", 10)
+                dex_score = (self.ability_scores or {}).get("DEX", 10)
+                ability_label = "STR" if str_score >= dex_score else "DEX"
+            else:
+                ability_label = "STR"
+            weapon_preview = f"Wpn: {self.selected_weapon} ({weapon.dmg_num}d{weapon.dmg_die}+{ability_label})"
+        else:
+            weapon_preview = "Wpn: None"
+
+        if self.selected_armor:
+            armor = ARMOR[self.selected_armor]
+            armor_preview = f"AC: {armor.ac_base}"
+            if armor.ac_bonus_dex:
+                armor_preview += "+DEX"
+            if armor.max_dex is not None:
+                armor_preview += f" (max +{armor.max_dex})"
+        else:
+            armor_preview = "AC: Unarmored"
+
+        self.screen.blit(self.font_small.render(weapon_preview, True, COLOR_TEXT), (430, 64))
+        self.screen.blit(self.font_small.render(armor_preview, True, COLOR_TEXT), (430, 82))
+
+        self.equipment_continue_button.text = "To Armor"
+        self.equipment_continue_button.draw(self.screen, self.font_medium)
+
+    def draw_armor_select(self):
+        from items import WEAPONS, ARMOR
+
+        remaining = self.equipment_budget - self.equipment_spent
+        title = self.font_large.render("Choose Armor (Optional)", True, COLOR_TEXT)
+        self.screen.blit(title, (self.width // 2 - title.get_width() // 2, 10))
+
+        budget_text = self.font_small.render(
+            f"Equipment Budget: {remaining}/{self.equipment_budget} gp remaining",
+            True,
+            COLOR_TEXT if remaining >= 0 else (255, 100, 100),
+        )
+        self.screen.blit(budget_text, (20, 45))
+
+        helper = self.font_small.render("Step 2/2: select your armor, then continue.", True, COLOR_TEXT_SELECTED)
+        self.screen.blit(helper, (20, 70))
+
+        for btn in self.armor_buttons.values():
+            btn.draw(self.screen, self.font_small)
+
+        armor_page_count = max(1, (len(self.available_armor) + self.armor_page_size - 1) // self.armor_page_size)
+        armor_page_label = self.font_small.render(f"Page {self.armor_page + 1}/{armor_page_count}", True, COLOR_TEXT)
+        self.screen.blit(armor_page_label, (300, 503))
+        self.armor_prev_button.draw(self.screen, self.font_small)
+        self.armor_next_button.draw(self.screen, self.font_small)
+
+        focused_armor_name = None
+        mouse_pos = pygame.mouse.get_pos()
+        for armor_name, btn in self.armor_buttons.items():
+            if btn.rect.collidepoint(mouse_pos):
+                focused_armor_name = armor_name
+                break
+        if focused_armor_name is None:
+            focused_armor_name = self.selected_armor
+
+        if focused_armor_name and focused_armor_name in ARMOR:
+            armor = ARMOR[focused_armor_name]
+            armor_detail_title = self.font_small.render(f"Armor Focus: {focused_armor_name}", True, COLOR_TEXT_SELECTED)
+            armor_ac = f"AC: {armor.ac_base}" + (" + DEX" if armor.ac_bonus_dex else "")
+            if armor.max_dex is not None and armor.ac_bonus_dex:
+                armor_ac += f" (max +{armor.max_dex})"
+            armor_prof = f"Training: {armor.proficiency_type}"
+            armor_stealth = "Stealth: Disadvantage" if getattr(armor, "stealth_disadvantage", False) else "Stealth: Normal"
+            str_req = getattr(armor, "strength_requirement", None)
+            armor_req = f"Strength Req: {str_req}" if str_req else "Strength Req: None"
+            self.screen.blit(armor_detail_title, (20, 330))
+            self.screen.blit(self.font_small.render(armor_ac, True, COLOR_TEXT), (20, 350))
+            self.screen.blit(self.font_small.render(armor_prof, True, COLOR_TEXT), (20, 370))
+            self.screen.blit(self.font_small.render(armor_stealth, True, COLOR_TEXT), (20, 390))
+            self.screen.blit(self.font_small.render(armor_req, True, COLOR_TEXT), (20, 410))
+
+        preview_title = self.font_small.render("Current Selection", True, COLOR_TEXT_SELECTED)
+        self.screen.blit(preview_title, (430, 46))
+
+        if self.selected_weapon:
+            weapon = WEAPONS[self.selected_weapon]
+            proficiency_type = str(getattr(weapon, "proficiency_type", ""))
+            if "Ranged" in proficiency_type:
+                ability_label = "DEX"
+            elif bool(getattr(weapon, "finesse", False)):
+                str_score = (self.ability_scores or {}).get("STR", 10)
+                dex_score = (self.ability_scores or {}).get("DEX", 10)
+                ability_label = "STR" if str_score >= dex_score else "DEX"
+            else:
+                ability_label = "STR"
+            weapon_preview = f"Wpn: {self.selected_weapon} ({weapon.dmg_num}d{weapon.dmg_die}+{ability_label})"
+        else:
+            weapon_preview = "Wpn: None"
+
+        if self.selected_armor:
+            armor = ARMOR[self.selected_armor]
+            armor_preview = f"AC: {armor.ac_base}"
+            if armor.ac_bonus_dex:
+                armor_preview += "+DEX"
+            if armor.max_dex is not None:
+                armor_preview += f" (max +{armor.max_dex})"
+        else:
+            armor_preview = "AC: Unarmored"
+
+        self.screen.blit(self.font_small.render(weapon_preview, True, COLOR_TEXT), (430, 64))
+        self.screen.blit(self.font_small.render(armor_preview, True, COLOR_TEXT), (430, 82))
+
+        if self.equipment_spent > self.equipment_budget:
+            err = self.font_small.render("Selection exceeds budget. Pick cheaper gear or deselect an item.", True, (255, 100, 100))
+            self.screen.blit(err, (20, 540))
+
+        self.armor_back_button.draw(self.screen, self.font_medium)
+        self.equipment_continue_button.text = "Continue"
+        self.equipment_continue_button.draw(self.screen, self.font_medium)
+
+    def draw_mastery_select(self):
+        from items import WEAPONS
+
+        title = self.font_large.render("Choose Weapon Masteries", True, COLOR_TEXT)
+        self.screen.blit(title, (self.width // 2 - title.get_width() // 2, 20))
+
+        summary = self.font_small.render(
+            f"Select {self.mastery_needed} proficient weapon kinds: {len(self.selected_weapon_masteries)}/{self.mastery_needed}",
+            True,
+            COLOR_TEXT_SELECTED,
+        )
+        self.screen.blit(summary, (40, 70))
+
+        for btn in self.mastery_buttons.values():
+            btn.draw(self.screen, self.font_small)
+
+        page_count = max(1, (len(self.mastery_options) + self.mastery_page_size - 1) // self.mastery_page_size)
+        page_label = self.font_small.render(f"Page {self.mastery_page + 1}/{page_count}", True, COLOR_TEXT)
+        self.screen.blit(page_label, (320, 503))
+
+        selected_text = ", ".join(self.selected_weapon_masteries) if self.selected_weapon_masteries else "None"
+        selected_line = self.font_small.render(f"Selected: {selected_text}", True, COLOR_TEXT)
+        self.screen.blit(selected_line, (40, 470))
+
+        focus_weapon_name = None
+        mouse_pos = pygame.mouse.get_pos()
+        for weapon_name, btn in self.mastery_buttons.items():
+            if btn.rect.collidepoint(mouse_pos):
+                focus_weapon_name = weapon_name
+                break
+        if focus_weapon_name is None and self.selected_weapon_masteries:
+            focus_weapon_name = self.selected_weapon_masteries[-1]
+
+        if focus_weapon_name and focus_weapon_name in WEAPONS:
+            weapon = WEAPONS[focus_weapon_name]
+            mastery = str(getattr(weapon, "mastery", "None"))
+            properties = ", ".join(getattr(weapon, "properties", [])) or "None"
+            proficiency = str(getattr(weapon, "proficiency_type", "Unknown"))
+            range_text = f"{getattr(weapon, 'range_normal_ft', 5)}/{getattr(weapon, 'range_long_ft', 5)} ft"
+            damage_text = f"{weapon.dmg_num}d{weapon.dmg_die} {getattr(weapon, 'damage_type', 'physical')}"
+            if getattr(weapon, "versatile_dmg_die", None):
+                damage_text += f" (versatile 1d{weapon.versatile_dmg_die})"
+
+            focus_title = self.font_small.render(f"Focus: {focus_weapon_name}", True, COLOR_TEXT_SELECTED)
+            focus_line_1 = self.font_small.render(f"Damage: {damage_text}", True, COLOR_TEXT)
+            focus_line_2 = self.font_small.render(f"Mastery: {mastery} | Proficiency: {proficiency}", True, COLOR_TEXT)
+            focus_line_3 = self.font_small.render(f"Properties: {properties}", True, COLOR_TEXT)
+            focus_line_4 = self.font_small.render(f"Range: {range_text}", True, COLOR_TEXT)
+            self.screen.blit(focus_title, (40, 95))
+            self.screen.blit(focus_line_1, (40, 113))
+            self.screen.blit(focus_line_2, (40, 131))
+            self.screen.blit(focus_line_3, (40, 149))
+            self.screen.blit(focus_line_4, (40, 167))
+
+        if not self._mastery_selection_valid():
+            err = self.font_small.render("Choose the exact number of weapon masteries before continuing.", True, (255, 100, 100))
+            self.screen.blit(err, (40, 545))
+
+        self.mastery_prev_button.draw(self.screen, self.font_small)
+        self.mastery_next_button.draw(self.screen, self.font_small)
+        self.mastery_continue_button.draw(self.screen, self.font_medium)
+
+    def draw_fighting_style_select(self):
+        """Draw the Fighting Style selection screen for Fighter."""
+        title = self.font_large.render("Choose a Fighting Style", True, COLOR_TEXT)
+        self.screen.blit(title, (self.width // 2 - title.get_width() // 2, 20))
+        hint = self.font_small.render("Fighters gain a Fighting Style feat at level 1. Select one.", True, COLOR_TEXT)
+        self.screen.blit(hint, (40, 70))
+
+        for btn in self.fighting_style_buttons.values():
+            btn.draw(self.screen, self.font_small)
+
+        if not self.selected_fighting_style:
+            err = self.font_small.render("Select a fighting style to continue.", True, (255, 100, 100))
+            self.screen.blit(err, (40, 545))
+        self.fighting_style_continue_button.draw(self.screen, self.font_medium)
+
+    def draw_expertise_select(self):
+        """Draw the Expertise skill selection screen for Rogue."""
+        title = self.font_large.render("Choose Expertise Skills (2)", True, COLOR_TEXT)
+        self.screen.blit(title, (self.width // 2 - title.get_width() // 2, 20))
+        hint = self.font_small.render("Double your proficiency bonus on 2 of your proficient skills.", True, COLOR_TEXT)
+        self.screen.blit(hint, (40, 70))
+        selected_text = self.font_medium.render(f"Selected: {len(self.selected_expertise)}/2", True, COLOR_TEXT_SELECTED)
+        self.screen.blit(selected_text, (40, 100))
+
+        for btn in self.expertise_buttons.values():
+            btn.draw(self.screen, self.font_medium)
+
+        if len(self.selected_expertise) != 2:
+            err = self.font_small.render("Select exactly 2 skills.", True, (255, 100, 100))
+            self.screen.blit(err, (40, 545))
+        self.expertise_continue_button.draw(self.screen, self.font_medium)
     
     def draw_review(self):
         """Draw the character review screen."""
@@ -1268,8 +1962,8 @@ class CharacterCreatorGUI:
         self.screen.blit(skills_line, (30, y))
         y += 30
 
-        tool_text = self.selected_tool or "None"
-        tool_line = self.font_small.render(f"Tool: {tool_text}", True, COLOR_TEXT)
+        tool_text = ", ".join(self.selected_tools) if self.selected_tools else "None"
+        tool_line = self.font_small.render(f"Tools: {tool_text}", True, COLOR_TEXT)
         self.screen.blit(tool_line, (30, y))
         y += 30
 
@@ -1277,6 +1971,21 @@ class CharacterCreatorGUI:
         spells_line = self.font_small.render(f"Spells: {spells_text}", True, COLOR_TEXT)
         self.screen.blit(spells_line, (30, y))
         y += 30
+
+        mastery_text = ", ".join(self.selected_weapon_masteries) if self.selected_weapon_masteries else "None"
+        mastery_line = self.font_small.render(f"Weapon Masteries: {mastery_text}", True, COLOR_TEXT)
+        self.screen.blit(mastery_line, (30, y))
+        y += 25
+
+        if self.selected_fighting_style:
+            fs_line = self.font_small.render(f"Fighting Style: {self.selected_fighting_style}", True, COLOR_TEXT)
+            self.screen.blit(fs_line, (30, y))
+            y += 25
+
+        if self.selected_expertise:
+            exp_line = self.font_small.render(f"Expertise: {', '.join(self.selected_expertise)}", True, COLOR_TEXT)
+            self.screen.blit(exp_line, (30, y))
+            y += 25
 
         gold_line = self.font_small.render("Gold: 50 GP", True, COLOR_TEXT)
         self.screen.blit(gold_line, (30, y))
@@ -1332,8 +2041,16 @@ class CharacterCreatorGUI:
             self.draw_tool_select()
         elif self.screen_state == "spell_select":
             self.draw_spell_select()
-        elif self.screen_state == "equipment_select":
-            self.draw_equipment_select()
+        elif self.screen_state == "weapon_select":
+            self.draw_weapon_select()
+        elif self.screen_state == "armor_select":
+            self.draw_armor_select()
+        elif self.screen_state == "mastery_select":
+            self.draw_mastery_select()
+        elif self.screen_state == "fighting_style_select":
+            self.draw_fighting_style_select()
+        elif self.screen_state == "expertise_select":
+            self.draw_expertise_select()
         elif self.screen_state == "origin_feat_select":
             self.draw_origin_feat_select()
         elif self.screen_state == "review":

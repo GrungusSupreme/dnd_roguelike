@@ -6,11 +6,18 @@ See goblin stat blocks for baseline values.
 from character import Character
 
 
+def _with_senses(enemy: Character, passive_perception: int, darkvision_range: int = 0) -> Character:
+    enemy.passive_perception = passive_perception
+    if darkvision_range > 0:
+        enemy.darkvision_range = darkvision_range
+    return enemy
+
+
 def _make_goblin_variant(base_name: str, wave: int, wave_scaling_hp: int, wave_scaling_attack: int, bounty: int, index: int):
     """Legacy goblin variants used as fallback/early-wave baseline."""
     typ = index % 3
     if typ == 0:
-        return Character(
+        return _with_senses(Character(
             base_name + " Warrior",
             hp=10 + wave_scaling_hp,
             ac=15,
@@ -19,10 +26,11 @@ def _make_goblin_variant(base_name: str, wave: int, wave_scaling_hp: int, wave_s
             dmg_die=6,
             dmg_bonus=2,
             bounty=bounty,
-            behavior="melee"
-        )
+            behavior="melee",
+            speed_ft=30,
+        ), passive_perception=9, darkvision_range=60)
     if typ == 1:
-        return Character(
+        return _with_senses(Character(
             base_name + " Archer",
             hp=7 + wave_scaling_hp,
             ac=12,
@@ -33,8 +41,9 @@ def _make_goblin_variant(base_name: str, wave: int, wave_scaling_hp: int, wave_s
             bounty=bounty,
             behavior="ranged",
             attack_range=3,
-        )
-    return Character(
+            speed_ft=30,
+        ), passive_perception=9, darkvision_range=60)
+    return _with_senses(Character(
         base_name + " Boss",
         hp=21 + wave_scaling_hp,
         ac=17,
@@ -46,7 +55,8 @@ def _make_goblin_variant(base_name: str, wave: int, wave_scaling_hp: int, wave_s
         bounty=bounty * 2,
         behavior="healer",
         attack_range=1,
-    )
+        speed_ft=30,
+    ), passive_perception=10, darkvision_range=60)
 
 
 def make_enemy(wave: int, index: int, bounty: int = 1, archetype: str | None = None):
@@ -74,7 +84,7 @@ def make_enemy(wave: int, index: int, bounty: int = 1, archetype: str | None = N
     archetype = archetype.lower()
 
     if archetype == "goblin_warrior":
-        return Character(
+        return _with_senses(Character(
             f"Goblin {wave}-{index+1} Warrior",
             hp=10 + wave_scaling_hp,
             ac=15,
@@ -85,10 +95,11 @@ def make_enemy(wave: int, index: int, bounty: int = 1, archetype: str | None = N
             bounty=bounty,
             behavior="melee",
             attack_range=1,
-        )
+            speed_ft=30,
+        ), passive_perception=9, darkvision_range=60)
 
     if archetype == "goblin_archer":
-        return Character(
+        return _with_senses(Character(
             f"Goblin {wave}-{index+1} Archer",
             hp=7 + wave_scaling_hp,
             ac=12,
@@ -99,10 +110,11 @@ def make_enemy(wave: int, index: int, bounty: int = 1, archetype: str | None = N
             bounty=bounty,
             behavior="ranged",
             attack_range=4,
-        )
+            speed_ft=30,
+        ), passive_perception=9, darkvision_range=60)
 
     if archetype == "goblin_boss":
-        return Character(
+        return _with_senses(Character(
             f"Goblin {wave}-{index+1} Boss",
             hp=21 + wave_scaling_hp,
             ac=17,
@@ -114,10 +126,11 @@ def make_enemy(wave: int, index: int, bounty: int = 1, archetype: str | None = N
             bounty=bounty * 2,
             behavior="healer",
             attack_range=1,
-        )
+            speed_ft=30,
+        ), passive_perception=10, darkvision_range=60)
 
     if archetype == "orc":
-        return Character(
+        return _with_senses(Character(
             f"Orc {wave}-{index+1}",
             hp=15 + wave_scaling_hp,
             ac=13,
@@ -128,10 +141,11 @@ def make_enemy(wave: int, index: int, bounty: int = 1, archetype: str | None = N
             bounty=bounty + 1,
             behavior="melee",
             attack_range=1,
-        )
+            speed_ft=30,
+        ), passive_perception=10, darkvision_range=60)
 
     if archetype == "skeleton":
-        return Character(
+        return _with_senses(Character(
             f"Skeleton {wave}-{index+1}",
             hp=9 + wave_scaling_hp,
             ac=13,
@@ -142,10 +156,11 @@ def make_enemy(wave: int, index: int, bounty: int = 1, archetype: str | None = N
             bounty=bounty,
             behavior="ranged",
             attack_range=5,
-        )
+            speed_ft=30,
+        ), passive_perception=8, darkvision_range=60)
 
     if archetype == "troll":
-        return Character(
+        return _with_senses(Character(
             f"Troll {wave}-{index+1}",
             hp=24 + (wave_scaling_hp * 2),
             ac=14,
@@ -156,10 +171,11 @@ def make_enemy(wave: int, index: int, bounty: int = 1, archetype: str | None = N
             bounty=bounty + 3,
             behavior="regenerator",
             attack_range=1,
-        )
+            speed_ft=30,
+        ), passive_perception=13, darkvision_range=60)
 
     if archetype == "mage":
-        return Character(
+        return _with_senses(Character(
             f"Goblin Mage {wave}-{index+1}",
             hp=8 + wave_scaling_hp,
             ac=12,
@@ -170,6 +186,25 @@ def make_enemy(wave: int, index: int, bounty: int = 1, archetype: str | None = N
             bounty=bounty + 2,
             behavior="mage",
             attack_range=6,
-        )
+            speed_ft=30,
+        ), passive_perception=10, darkvision_range=60)
+
+    if archetype == "sneaky":
+        enemy = _with_senses(Character(
+            f"Goblin Skulk {wave}-{index+1}",
+            hp=7 + wave_scaling_hp,
+            ac=13,
+            attack_bonus=5 + wave_scaling_attack,
+            dmg_num=1,
+            dmg_die=4,
+            dmg_bonus=2,
+            bounty=bounty + 1,
+            behavior="sneaky",
+            attack_range=3,
+            speed_ft=30,
+        ), passive_perception=12, darkvision_range=60)
+        enemy.stealth_bonus = 6 + wave_scaling_attack  # +6 Stealth base, scales
+        enemy.sneak_attack_dice = 1 + (wave - 1) // 3  # 1d6 base, +1d6 every 3 waves
+        return enemy
 
     return _make_goblin_variant(f"Goblin {wave}-{index+1}", wave, wave_scaling_hp, wave_scaling_attack, bounty, index)

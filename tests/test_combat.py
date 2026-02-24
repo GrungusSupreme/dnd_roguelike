@@ -63,6 +63,17 @@ class TestCombat(unittest.TestCase):
         # after tie-break, player should come before g1
         self.assertEqual(ordered[0][0].name, "Player")
 
+    def test_ranged_in_melee_shows_disadvantage_note(self):
+        archer = character.Character("Archer", hp=20, ac=15, attack_bonus=5, dmg_num=1, dmg_die=8, dmg_bonus=3, attack_range=3)
+        target = character.Character("Target", hp=12, ac=15, attack_bonus=4, dmg_num=1, dmg_die=6)
+        seq = iter([18, 5])
+        dice.roll_die = lambda sides=20: next(seq)
+        dice.roll_dice = lambda num, sides: 4
+
+        result = archer.attack(target, target_distance=1)
+
+        self.assertIn("Disadvantage: Ranged in melee", result)
+
 
 if __name__ == "__main__":
     unittest.main()

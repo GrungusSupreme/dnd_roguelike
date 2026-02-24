@@ -9,55 +9,26 @@
       "WIS": 8
     },
     "class_name": "Barbarian",
+    "expertise_skills": [],
+    "fighting_style": null,
     "gold": 100,
     "name": "Grungo",
     "origin_feats": [
-      "Savage Attacker"
+      "Meaty"
     ],
     "skill_proficiencies": [
-      "Nature",
+      "Perception",
       "Survival"
     ],
-    "species": "Orc",
-    "species_traits": {},
-    "tool_proficiencies": [
-      "Brewer's Supplies"
-    ]
-  },
-  {
-    "ability_scores": {
-      "CHA": 10,
-      "CON": 14,
-      "DEX": 14,
-      "INT": 17,
-      "STR": 8,
-      "WIS": 12
-    },
-    "class_name": "Wizard",
-    "gold": 100,
-    "name": "gandalf teh gay",
-    "origin_feats": [
-      "Magic Initiate (Wizard)"
-    ],
-    "skill_proficiencies": [
-      "Arcana",
-      "History"
-    ],
-    "species": "Dragonborn",
+    "species": "Goliath",
     "species_traits": {
-      "Draconic Ancestry": "White (Cold)"
+      "Giant Ancestry": "Hill"
     },
-    "spells": [
-      "Fire Bolt",
-      "Ray of Frost",
-      "Shocking Grasp",
-      "Magic Missile",
-      "Chromatic Orb",
-      "Burning Hands",
-      "Thunderwave"
-    ],
-    "tool_proficiencies": [
-      "Alchemist's Supplies"
+    "spells": [],
+    "tool_proficiencies": [],
+    "weapon_masteries": [
+      "Greatsword",
+      "Greatclub"
     ]
   }
 ]

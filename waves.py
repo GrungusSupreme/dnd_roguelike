@@ -31,6 +31,7 @@ def spawn_wave(wave_number: int, count: int = None):
             "mage",
             "troll",
             "goblin_boss",
+            "sneaky",
         ]
 
     for i in range(count):

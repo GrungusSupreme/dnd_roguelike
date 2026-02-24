@@ -156,9 +156,15 @@ class TestSpeciesTraits(unittest.TestCase):
         dice.roll_dice = lambda num, sides: 5
 
         uses = goliath.giant_ancestry_uses_remaining
+        self.assertEqual(uses, goliath.get_proficiency_bonus())
         for _ in range(uses):
             goliath.attack(target)
+            # Fire's Burn is an optional on-hit activation
+            goliath.activate_on_hit_feature("goliath_fire_burn", target=target)
         self.assertEqual(goliath.giant_ancestry_uses_remaining, 0)
+        # Verify no more uses available
+        result = goliath.activate_on_hit_feature("goliath_fire_burn", target=target)
+        self.assertIn("No uses remaining", result)
 
     def test_halfling_lucky_rerolls_natural_one(self):
         halfling = character.Character(

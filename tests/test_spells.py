@@ -134,13 +134,72 @@ class TestSpells(unittest.TestCase):
         )
         t1 = character.Character("Goblin A", hp=12, ac=10, attack_bonus=2, dmg_num=1, dmg_die=6)
         t2 = character.Character("Goblin B", hp=12, ac=10, attack_bonus=2, dmg_num=1, dmg_die=6)
-        before_slots = caster.spell_slots_current.get(1)
+        before_slots = caster.spell_slots_current.get(1, 0)
 
         caster.cast_aoe_spell("Burning Hands", [t1, t2])
 
-        self.assertEqual(caster.spell_slots_current.get(1), before_slots - 1)
+        self.assertEqual(caster.spell_slots_current.get(1, 0), before_slots - 1)
         self.assertEqual(t1.hp, 6)
         self.assertEqual(t2.hp, 6)
+
+
+    # ------------------------------------------------------------------
+    # Tests for cast_spell return value (used by GUI to display hit/miss)
+    # ------------------------------------------------------------------
+
+    def test_cast_spell_returns_hit_string_on_hit(self):
+        """cast_spell should return a string containing 'HIT' on success."""
+        caster = character.Character(
+            "Sorc", hp=14, ac=12, attack_bonus=5,
+            dmg_num=1, dmg_die=6, class_name="Sorcerer",
+            spells=["Fire Bolt"],
+        )
+        target = character.Character(
+            "Goblin", hp=20, ac=10, attack_bonus=2,
+            dmg_num=1, dmg_die=6,
+        )
+        dice.roll_die = lambda sides=20: 15  # 15+5=20, hits AC 10
+        dice.roll_dice = lambda num, sides: 3
+
+        result = caster.cast_spell("Fire Bolt", target=target)
+        self.assertIn("HIT", result)
+        self.assertLess(target.hp, 20)
+
+    def test_cast_spell_returns_miss_string_on_miss(self):
+        """cast_spell should return a string containing 'MISS' on miss."""
+        caster = character.Character(
+            "Sorc", hp=14, ac=12, attack_bonus=5,
+            dmg_num=1, dmg_die=6, class_name="Sorcerer",
+            spells=["Fire Bolt"],
+        )
+        target = character.Character(
+            "Goblin", hp=20, ac=25, attack_bonus=2,
+            dmg_num=1, dmg_die=6,
+        )
+        dice.roll_die = lambda sides=20: 5  # 5+5=10, misses AC 25
+        dice.roll_dice = lambda num, sides: 3
+
+        result = caster.cast_spell("Fire Bolt", target=target)
+        self.assertIn("MISS", result)
+        self.assertEqual(target.hp, 20)
+
+    def test_magic_missile_auto_hits(self):
+        """Magic Missile should always hit (no attack roll) per SRD."""
+        caster = character.Character(
+            "Sorc", hp=14, ac=12, attack_bonus=5,
+            dmg_num=1, dmg_die=6, class_name="Sorcerer",
+            spells=["Magic Missile"],
+        )
+        target = character.Character(
+            "Goblin", hp=20, ac=30, attack_bonus=2,
+            dmg_num=1, dmg_die=6,
+        )
+        dice.roll_die = lambda sides=20: 1  # irrelevant for MM
+        dice.roll_dice = lambda num, sides: num  # min rolls
+
+        result = caster.cast_spell("Magic Missile", target=target)
+        self.assertIn("HIT", result)
+        self.assertLess(target.hp, 20)
 
 
 if __name__ == "__main__":

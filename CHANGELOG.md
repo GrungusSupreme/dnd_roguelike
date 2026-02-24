@@ -1,9 +1,398 @@
 # dnd_roguelike — Changelog & Project State
 
-**Last Updated:** 2026-02-14 (Session 9 - Phase 3 Slice 1)  
-**Version:** 0.8.1 (Calendar + Keep Loop Foundation)
+**Last Updated:** 2026-02-22 (Session 16 - Staggered Enemy Turns + Enemy Stealth System)  
+**Version:** 0.8.6 (Staggered Combat + Goblin Skulk Stealth)
 
-This file documents the complete project state for reference when clearing chat history.
+This file documents the current project state for reference when clearing chat history.
+
+---
+
+## 📋 Session 16 - Staggered Enemy Turns + Enemy Stealth System
+
+### ✅ COMPLETED THIS SESSION
+
+#### Staggered Enemy Turns (main_gui.py — GameState)
+Previously, all enemies resolved their actions in a single `resolve_combat()` pass within one frame, making combat feel instant. Now each enemy acts one at a time with a visible 1.5-second pause between turns.
+
+**Core mechanism:**
+- `_enemy_turn_index: int` — Tracks which enemy is currently acting during the processing phase
+- `_processing_subphase` expanded from `"idle"` / `"post_movement"` to include `"resolving_enemies"` and `"cleanup"`
+- Phase flow: `"idle"` → snapshot + move + AoO checks → `"resolving_enemies"` → process one enemy per update cycle → `"cleanup"` → end round → `"player_input"`
+- `_resolve_single_enemy(enemy)` — Extracted from old `resolve_combat()` loop body. Handles adjacency check, attack roll, damage, healing behavior, and stealth mechanics for one enemy.
+- `self.pause_frames = 90` (1.5s at 60 FPS) set after each enemy acts, creating visible gaps between enemy turns
+- Enemy list iterated via `_enemy_turn_index`; increments after each enemy resolves or is skipped (dead/not adjacent)
+
+#### Enemy Stealth System — Goblin Skulk Archetype
+A new `"sneaky"` enemy archetype that can enter stealth, attack from hiding with advantage and bonus sneak attack damage, and be detected by the player's active Perception checks.
+
+**New archetype in monsters.py:**
+- `"sneaky"` archetype creates **Goblin Skulk**: AC 13, HP 7 + wave scaling, +5 attack, 1d4+2 damage, range 3
+- `behavior = "sneaky"` — Flags the enemy for stealth behavior
+- `stealth_bonus = 6 + wave_scaling_attack` — Used for contested stealth checks
+- `sneak_attack_dice = 1 + (wave - 1) // 3` — Extra d6s of damage when attacking from stealth (scales with wave)
+- Added to wave 3+ archetype rotation in `waves.py`
+- Dark green color `(100, 140, 100)` in gui.py for skulk rendering
+
+**Stealth tracking in GameState:**
+- `hidden_enemies: set` — Tracks which enemies are currently stealthed
+- Populated in `add_enemies()` for enemies with `behavior="sneaky"`
+- Cleaned up in `"cleanup"` subphase (dead enemies removed from set)
+
+**Stealth attack mechanics (in `_resolve_single_enemy`):**
+- When a hidden enemy attacks, it sets `player._stealth_advantage = True` → grants advantage ("Unseen Attacker") on the attack roll via `character.py`'s `attack()` advantage_reasons list
+- Rolls `sneak_attack_dice` × d6 bonus damage on hit
+- Enemy is **revealed** after attacking (removed from `hidden_enemies`) regardless of hit/miss
+- Combat log shows "[Enemy] strikes from the shadows!" and sneak attack damage separately
+
+**Player Perception checks:**
+- `_check_player_perception_vs_hidden_enemies()` — Called at start of each player turn
+- **Active roll:** `d20 + Perception bonus` vs enemy's `stealth_bonus + 10` (stealth total)
+- On success: enemy revealed, message "[Enemy] spotted! (Perception [roll] vs Stealth [DC])"
+- On failure: **silent** — no message shown, player doesn't know a check was made
+- `_player_can_attempt_detection()` — Returns True (one check per turn)
+
+**Re-stealth mechanic:**
+- `_enemy_attempt_re_stealth(enemy)` — Called after a sneaky enemy's turn if it's not hidden
+- Requires enemy to be adjacent to a rock (cover)
+- Contested: enemy `stealth_bonus + d20` vs player's active `d20 + Perception bonus`
+- On success: enemy re-enters `hidden_enemies`, message "[Enemy] slips back into the shadows!"
+- On failure: **silent** — no message shown
+
+**AoE interaction:**
+- `cast_aoe_spell_at()` now includes hidden enemies in its target list
+- Hidden enemies hit by AoE are **revealed** ("flushed out of hiding by the blast!")
+- Single-target attacks (`attack_enemy_at()`) and spells (`cast_spell_at()`) still skip hidden enemies — player cannot target what they can't see
+
+**GUI rendering:**
+- `render()` accepts `hidden_enemies` parameter
+- Enemy rendering loop skips enemies in `hidden_enemies` — they are invisible on the grid
+- No health bar, no name, no circle — fully hidden until revealed
+
+### 🧪 Test Coverage
+- **23 new tests** in `tests/test_enemy_stealth.py`:
+  - `TestSneakyEnemySpawnHidden` (3 tests): sneaky enemy starts hidden, non-sneaky doesn't, hidden set populated on spawn
+  - `TestPlayerPerceptionCheck` (4 tests): successful detection reveals, failed detection is silent, active roll uses d20+bonus, detection at turn start
+  - `TestSneakyEnemyAttack` (4 tests): attack from stealth has advantage, sneak attack adds bonus d6 damage, enemy revealed after attack, attack message shows stealth flavor
+  - `TestSneakyEnemyReStealth` (3 tests): re-stealth near rock succeeds on high roll, fails without cover, contested by active Perception
+  - `TestPlayerCannotTargetHidden` (1 test): click-to-attack skips hidden enemies
+  - `TestAoEHitsHiddenEnemies` (1 test): AoE includes and reveals hidden enemies
+  - `TestMakeEnemySneaky` (4 tests): sneaky archetype stats, stealth_bonus scaling, sneak_attack_dice scaling, behavior flag
+  - `TestCharacterStealthAdvantage` (2 tests): _stealth_advantage grants advantage, flag auto-clears after attack
+  - `TestCleanupDeadHidden` (1 test): dead enemies removed from hidden_enemies set
+- **Total test count: 230 (207 existing + 23 new), all passing**
+
+### 🔧 Architecture Impact
+- **No breaking changes** to existing systems
+- `_resolve_single_enemy()` replaces the inner loop body of old `resolve_combat()` — same logic, now called per-enemy with pauses
+- `hidden_enemies` set is a new GameState field — all existing code paths are unaffected (enemies not in the set behave normally)
+- `character.py` change is minimal: `_stealth_advantage` flag checked in existing `advantage_reasons` list, auto-clears after use
+- Trigger system from Session 15 is fully compatible — triggers still queue during staggered enemy turns
+- Fog of war and stealth are independent systems: fog hides based on player vision range, stealth hides based on enemy behavior
+
+### 📌 Resume Notes
+- The `"sneaky"` archetype is the first enemy with behavior-driven combat mechanics beyond basic attack/heal
+- Enemy stealth mirrors the player's Hide system conceptually (contested Stealth vs Perception) but uses its own implementation in GameState rather than character.py
+- `_stealth_advantage` on Character is a generic flag — any future "unseen attacker" mechanic can set it
+- Staggered turns make future per-enemy visual effects feasible (animations, status icons, etc.)
+- Re-stealth requires adjacency to a rock — this creates tactical play where destroying/avoiding cover matters
+- Silent failure on Perception checks prevents metagaming — player doesn't know hidden enemies exist until revealed
+- `_processing_subphase` states: `"idle"` → `"resolving_enemies"` → `"cleanup"` — future enemy phases can be inserted
+- Phase 3 seasonal loop remains the next major milestone
+
+---
+
+## 📋 Session 15 - Mid-Combat Trigger Confirmation System
+
+### ✅ COMPLETED THIS SESSION
+
+#### Trigger Queue System (main_gui.py — GameState)
+Previously, weapon masteries (Push/Cleave/Nick) auto-applied on hit, on-hit species features (Goliath ancestry) used sidebar buttons, and Attack of Opportunity didn't exist. Now all optional mid-combat decisions use a **unified trigger queue** with modal confirmation popups.
+
+**Core mechanism:**
+- `pending_triggers: list[dict]` — FIFO queue of trigger dicts with title, description lines, accept/decline labels, and callback functions
+- `queue_trigger(trigger)` — Adds a trigger to the queue
+- `get_current_trigger_modal()` — Returns a modal dict for the front trigger (compatible with existing `draw_modal_overlay()`)
+- `resolve_current_trigger(accepted)` — Pops the front trigger, calls on_accept or on_decline callback
+- New turn phase `"awaiting_trigger"` — Pauses combat while waiting for player response. All other clicks are ignored.
+- `_trigger_resume_phase: str` — Remembers which phase to return to after all triggers are resolved (player_input or processing)
+
+#### Attack of Opportunity (Reaction Economy)
+- **New state:** `reaction_used: bool` — One reaction per round, resets at start of player turn
+- **Detection:** `_check_aoo_triggers(pre_move_positions)` — Called after `move_enemies()` with a snapshot of enemy positions from before movement. If any enemy moved from within player melee reach to outside reach, queues an AoO trigger.
+- **Melee reach calculation:** `_get_player_melee_reach()` returns 1 tile (5 ft) normally, 2 tiles (10 ft) for Reach weapons. `_player_has_melee_capability()` returns False for ranged-only weapons.
+- **AoO modal:** "Attack of Opportunity — [Enemy] is leaving your reach! Spend your reaction to make a melee attack?" Accept rolls a melee attack and sets `reaction_used = True`. Only one AoO queued per round.
+
+#### Weapon Mastery Confirmations (Push / Cleave / Nick)
+Previously auto-applied on hit. Now `_queue_weapon_mastery_trigger(enemy, mastery)` queues a modal:
+- **Push:** "Shove the target 1 tile away?" → calls `_apply_push_mastery()` on accept
+- **Cleave:** "Deal weapon damage to an adjacent enemy?" — Only queued if valid secondary targets exist near the primary target. Shows candidate names. → calls `_apply_cleave_mastery()` on accept
+- **Nick:** "Make an extra offhand attack with [weapon]?" — Only queued if a Light offhand weapon is equipped. → calls `_apply_nick_mastery()` on accept
+
+**Phase transition:** After `attack_enemy_at()`, if triggers were queued, `turn_phase` changes to `"awaiting_trigger"` with `_trigger_resume_phase = "player_input"`.
+
+#### On-Hit Species Feature Triggers (Goliath Ancestry)
+- `_queue_on_hit_species_triggers(enemy)` — Replaces the old `_set_pending_on_hit_options()` + sidebar button approach
+- Goliath Fire's Burn, Frost's Chill, Hill's Tumble now use modal confirmation popups
+- Old `pending_on_hit_actions` dict and `get_pending_on_hit_ui_actions()` still exist but are no longer populated by attack (kept for backward compatibility)
+
+#### Processing Phase Split (Enemy Turn Interruptibility)
+The `"processing"` phase now uses `_processing_subphase`:
+1. `"idle"` → Snapshot positions, move enemies, check AoO triggers. If triggers queued → enter `"awaiting_trigger"`, resume to `"post_movement"`.
+2. `"post_movement"` → Resolve enemy attacks, end round, reset to `"player_input"`.
+
+#### Main Loop Integration
+- After `handle_events()`, the battle loop now checks for `awaiting_trigger` phase and routes modal clicks (`trigger_accept`/`trigger_decline`) to `resolve_current_trigger()`
+- When all triggers are resolved, `turn_phase` returns to `_trigger_resume_phase`
+- `render()` now passes `modal=trigger_modal` when in `awaiting_trigger` phase, using the existing `draw_modal_overlay()` system
+
+### 🧪 Test Coverage
+- **18 new tests** in `tests/test_combat_triggers.py`:
+  - `TestTriggerQueue` (5 tests): queue/modal, accept callback, decline callback, empty modal, ordered resolution
+  - `TestAttackOfOpportunity` (6 tests): AoO queued when leaving reach, no AoO staying in reach, no AoO when reaction used, accept uses reaction, reaction resets on turn, no AoO when enemy wasn't in reach
+  - `TestWeaponMasteryTriggers` (4 tests): Push queues, Cleave queues with adjacent, Cleave skips without adjacent, Nick queues with offhand
+  - `TestOnHitSpeciesTriggers` (2 tests): Goliath Fire queues, no trigger at 0 uses
+  - `TestTriggerPhaseTransitions` (1 test): Push mastery hit enters awaiting_trigger phase
+- **Total test count: 207 (189 existing + 18 new), all passing**
+
+### 🔧 Architecture Impact
+- **No breaking changes** — existing on-hit button system (pending_on_hit_actions) still exists but is inactive
+- Weapon mastery apply methods (`_apply_push_mastery`, `_apply_cleave_mastery`, `_apply_nick_mastery`) unchanged — just called from trigger callbacks now
+- Modal rendering reuses existing `draw_modal_overlay()` in gui.py — no GUI changes needed
+- Sap, Slow, Topple, Vex, Graze masteries remain auto-applied (no player choice needed per SRD)
+
+### 📌 Resume Notes
+- The trigger system is extensible: any future reaction/decision can use `queue_trigger()` with a callback
+- Deflect Attack (Monk reaction) and Shield spell (Wizard reaction) are natural candidates for future triggers
+- `pending_on_hit_actions` and sidebar button approach are vestigial — can be removed in a cleanup pass
+- The `extra_actions` / `extra_action_tooltips` render params still work but are no longer used for on-hit features
+- Phase 3 seasonal loop remains the next major milestone
+
+---
+
+## 📋 Session 14 - Fog of War & Raid Direction System
+
+### ✅ COMPLETED THIS SESSION
+
+#### Fog of War / Vision System (main_gui.py + gui.py)
+- **Player vision range:** Base 10 cells + Perception skill bonus + darkvision_range/5
+  - Humans see ~11 cells, darkvision 60ft species see ~23, darkvision 120ft see ~35
+- **`compute_player_visibility()`** — Chebyshev distance + Bresenham LOS raycasting
+  - Rocks block LOS; trees do not (consistent with existing cover system)
+  - Results cached in `_visible_cells`, recomputed on every move/teleport
+  - Lazy recomputation: `is_cell_visible()` auto-recomputes if cache is stale
+- **Rendering:** Semi-transparent dark overlay on non-visible cells; enemies in fog are fully hidden (no circle, name, or HP bar)
+- **Targeting restrictions:** All targeting methods (`attack_enemy_at`, `cast_spell_at`, `cast_aoe_spell_at`, `breath_weapon_enemy_at`, `species_magic_enemy_at`, `apply_hunters_mark_at`) reject targets in fogged cells with "You can't see that area."
+  - Exception: Self-centred AoE spells (e.g. Thunderwave, `burst_self` shape) bypass fog check
+
+#### Raid Direction System (main_gui.py + gui.py)
+- **Directional spawning:** `add_enemies()` picks 1-3 random sides (north/south/east/west), always leaving at least 1 side free for kiting
+  - Rogues, Rangers, and mobile classes can flee toward the safe side
+- **Edge spawning:** Enemies spawn within 3 cells of their assigned edge via `_spawn_position_for_side()`
+- **Horn blast announcement:** `_generate_horn_blast_message()` generates thematic messages ("War horns sound from the North and East!")
+  - Displayed as wave start message and logged to combat log
+- **Raid direction indicators:** Red glow bars along raided map edges with directional labels (▼ N, ▲ S, ▶ W, ◀ E) rendered by `_draw_raid_direction_indicators()` in gui.py
+
+#### New State Fields on GameState
+- `raid_sides: list[str]` — Which sides enemies are raiding from (e.g. `['north', 'east']`)
+- `_visible_cells: set[tuple[int, int]]` — Cached visible cell set
+- `compute_player_visibility()` — Called on init, move, teleport (Cloud Jaunt), gate pass
+- `is_cell_visible(x, y)` — Lazy accessor with stale-cache detection
+- `_player_vision_range()` — Vision range calculation
+
+#### New render() Parameters (gui.py)
+- `fog_visible_cells: Optional[set]` — Passed from GameState._visible_cells
+- `raid_sides: Optional[list[str]]` — Passed from GameState.raid_sides
+- New colors: `COLOR_FOG = (0, 0, 0, 160)` and `COLOR_RAID_GLOW = (200, 40, 40)`
+
+#### Tests — 20 new tests in tests/test_fog_of_war.py
+- `TestPlayerVisionRange` (3 tests): base vision, darkvision extension, high darkvision
+- `TestVisibilityComputation` (6 tests): player pos visible, adjacent cells, far cells hidden, rock LOS blocking, lazy recompute, movement updates
+- `TestRaidDirectionSpawning` (4 tests): 1-3 sides, at least 1 free, correct edges, not in keep
+- `TestHornBlastMessage` (3 tests): 1/2/3 side messages
+- `TestFogOfWarTargeting` (4 tests): can't attack fogged enemies, can attack visible, can't cast at fogged, self-AoE ignores fog
+- **Total test count: 175 (155 existing + 20 new), all passing**
+
+### 🔧 Architecture Impact
+- **No breaking changes** — fog_visible_cells and raid_sides are optional render() params (default None = no fog)
+- Intermission screen deliberately does not pass fog data (full visibility during intermission)
+- Existing stealth/hidden system unchanged — fog of war is complementary (player can't see enemies, stealth is enemies can't see player)
+
+---
+
+## 📋 Session 13 - SRD Level-1 Class Features + Combat Polish
+
+### ✅ COMPLETED THIS SESSION
+
+#### Combat Polish (Early Session)
+- Fixed Pylance type errors in 4 test files
+- Enhanced combat log with detailed dice roll breakdowns (d20 rolls, modifiers, totals)
+- Fixed Goliath Fire Ancestry test (119/119 pass)
+- Fixed enemy ranged-in-melee disadvantage detection
+- Fixed Prone condition to SRD-compliant Advantage/Disadvantage system
+
+#### Level-1 Class Features (4 New Features)
+
+**Fighting Style (Fighter lv1)** — Character creator choice from 4 styles:
+- **Archery:** +2 to ranged weapon attack rolls (hooked into `get_attack_bonus_total()`)
+- **Defense:** +1 AC while wearing armor (hooked into `get_ac()`)
+- **Great Weapon Fighting:** Reroll 1s and 2s on damage dice for Two-Handed/Versatile weapons (`_is_gwf_eligible()`, `_roll_gwf_dice()`, applied in `attack()` base/crit/Savage Attacker rolls)
+- **Two-Weapon Fighting:** Available as selection (TWF mechanics pending dual-wield system)
+
+**Expertise (Rogue lv1, Bard lv2)** — Choose 2 proficient skills for doubled proficiency:
+- New `get_skill_bonus(skill_name)` method with full 18-skill SKILL_ABILITIES mapping
+- Expertise doubles proficiency bonus on chosen skills
+- Stealth bonus in `main_gui.py` now uses `get_skill_bonus("Stealth")`
+
+**Innate Sorcery (Sorcerer lv1)** — Bonus action, 2 uses/LR, 10-round duration:
+- +1 to spell save DC via `get_spell_save_dc()` while active
+- Advantage on Sorcerer spell attack rolls in `cast_spell()` (rolls second d20, takes higher)
+- Round countdown in `end_round()`, reset in `rest_features()`
+- GUI button added in `gui.py` feature_map + action handler in `main_gui.py`
+
+**Favored Enemy (Ranger lv1)** — Hunter's Mark always prepared + 2 free casts/LR:
+- Hunter's Mark available at level 1 (was level 2)
+- `use_hunters_mark()` checks `favored_enemy_free_casts` before feature uses
+- Free casts reset on long rest in `rest_features()`
+
+#### Character Creator Integration
+- New **Fighting Style selection screen** for Fighters (4 options with descriptions)
+- New **Expertise selection screen** for Rogues (pick 2 from proficient skills)
+- `_advance_to_class_feature_screen()` routing helper (Fighter→style, Rogue→expertise, else→species)
+- Both screens fully integrated: click handlers, hover effects, render, review display, preset saving
+
+### 🧪 Test Coverage
+- **22 new tests** in `tests/test_class_features_lv1.py`:
+  - Fighting Style: Archery +2 ranged, no melee effect, Defense +1 with armor, no effect without, GWF eligibility (Two-Handed, Versatile, shield blocks), GWF reroll behavior
+  - Expertise: doubled proficiency, normal proficiency, unproficient skill
+  - Innate Sorcery: activation, double-activate blocked, +1 DC, DC only for Sorcerer, round countdown, rest reset
+  - Favored Enemy: free casts init, non-Ranger zero, free-casts-first order, rest reset
+- **Total:** 141 tests, all passing
+
+### 📌 Resume Notes
+- All 4 class features are gameplay-functional with character creator integration
+- TWF fighting style is selectable but effects are pending dual-wield system implementation
+- Remaining level-1 features: Divine Order (Cleric), Druidic + Primal Order (Druid), Eldritch Invocations (Warlock), Thieves' Cant (Rogue)
+- Phase 3 seasonal loop remains the next major milestone
+
+---
+
+## 📋 Session 12 - Origin Feats Implementation + Cover Mechanics Fix
+
+### ✅ COMPLETED THIS SESSION
+
+#### Origin Feats (All 10 — Previously Non-Functional)
+All 10 origin feats were stored as strings in `self.origin_feats` but had **zero gameplay effects**. Now fully implemented:
+
+- **Alert:** +Proficiency Bonus to initiative rolls (`roll_initiative()`)
+- **Magic Initiate (Cleric/Druid/Wizard):** Grants 2 cantrips + 1 level-1 spell from chosen class. Free once/long-rest cast of the level-1 spell before spending slots. Non-casters get a dedicated spell slot. Spell slot preserved on level-up. Spellcasting ability matches the MI class (WIS for Cleric/Druid, INT for Wizard).
+- **Savage Attacker:** Roll damage twice, take the higher result. Once per turn, resets at `start_turn()`.
+- **Skilled:** +3 additional skill proficiencies chosen during character creation (from full `ALL_SKILLS` list).
+- **Crafty:** +3 tool proficiencies chosen during character creation (from `TOOL_PROFICIENCY_OPTIONS`). 20% gold discount on purchases (`get_buy_cost()`).
+- **Healthy:** Reroll 1s on healing dice from spells and potions. Potions changed from flat heal (7) to rolling 2d4+2 (with reroll-1s for Healthy).
+- **Iron Fist:** Reroll 1s on unarmed strike damage (Monk `martial_arts_strike()`).
+- **Meaty:** +2 HP at character creation and +2 HP per level-up.
+
+**Key implementation details:**
+- New method `_initialize_origin_feats()` called from `__init__` after `_initialize_species_features()`
+- New helper `has_origin_feat(keyword)` for substring matching (e.g., "Magic Initiate" matches all 3 variants)
+- New helper `_get_mi_class()` extracts class from "Magic Initiate (Cleric)" etc.
+- New helper `_roll_dice_reroll_ones()` for Healthy/Iron Fist reroll mechanic
+- `character_creator_gui.py` updated: `_init_skill_select()` adds Skilled picks, `_init_tool_select()` adds Crafty picks
+- Imports added to character.py: `CLASS_CANTRIP_OPTIONS`, `CLASS_LEVEL1_SPELL_OPTIONS` from spell_data
+
+#### Cover Mechanics (4 SRD Violations Fixed)
+Cover system in `main_gui.py` was non-compliant with SRD 5.2.1. All 4 issues resolved:
+
+1. **No directionality** — Cover applied if ANY obstacle adjacent to target regardless of attacker position. Fixed: now uses Bresenham ray tracing from attacker to target + dot-product adjacency check. Only obstacles between attacker and target provide cover.
+2. **Trees and rocks both +2 AC** — SRD defines two tiers. Fixed: trees = Half Cover (+2 AC), rocks = Three-Quarters Cover (+5 AC).
+3. **Spells ignored cover** — Ranged spell attacks now check cover via `_cover_bonus(attacker_pos, target_pos)` in `cast_spell_at()`.
+4. **Enemy ranged attacks ignored player cover** — `resolve_combat()` now applies cover bonus to player AC when enemies make ranged attacks.
+
+**Method signature changed:** `_cover_bonus(target_pos)` → `_cover_bonus(attacker_pos, target_pos)`
+
+### 🧪 Test Coverage
+- **30 new tests** in `tests/test_origin_feats.py` covering all 10 feats
+- **Total:** 119 tests (118 pass, 1 pre-existing Goliath Fire Ancestry fail)
+- Pre-existing failure: `test_goliath_fire_ancestry_uses_are_pb_limited` (AssertionError: 2 != 0) — not addressed this session
+
+### 📌 Resume Notes
+- All origin feats are now gameplay-functional. Character creation properly grants feat-specific bonuses.
+- Cover mechanics are SRD-aligned with directional ray tracing and two-tier AC bonuses.
+- Potions now roll 2d4+2 instead of flat 7 HP (affects balance).
+- Priority 0 seasonal-loop baseline remains the active development priority.
+- Known issue: Goliath Fire Ancestry test still failing (pre-existing).
+
+---
+
+## 📋 Session 11 - Combat UX & Stealth/Visibility Polish
+
+### ✅ COMPLETED THIS SESSION
+
+- Refactored optional on-hit feature activation in `character.py` into a registry-driven system (same runtime behavior, easier extension path).
+- Fixed player Rage usability in GUI flow by disabling auto-consume at combat start (`main_gui.py` now uses manual Rage activation).
+- Improved combat panel action economy readability in `gui.py` with explicit status badges:
+  - `A ✓ READY / ✗ USED`
+  - `BA ✓ READY / ✗ USED`
+- Added Temp HP visibility in UI player header (`HP current/max (+X THP)`), making Adrenaline Rush effects visible.
+- Split character creator equipment flow into separate screens for legibility:
+  - `weapon_select`
+  - `armor_select`
+  - Added Armor screen `Back` button while preserving selection/budget state.
+- Reworked hide behavior from binary invisibility to contested stealth detection:
+  - Hide now rolls Stealth vs enemy passive perception.
+  - Detection requires enemy sight range and no obscuring terrain between enemy and player.
+  - Enemies can reveal hidden players during resolution if checks pass.
+- Ensured casting spells reveals player from hiding the same way attacks do.
+- Added disadvantage messaging for ranged attacks made in melee:
+  - combat log now includes `Disadvantage: Ranged in melee`.
+
+### 🧪 Validation Completed
+
+- Focused suites repeatedly passed during implementation:
+  - `tests.test_main_gui_rewards`
+  - `tests.test_main_gui_enemy_ai`
+  - `tests.test_combat`
+  - `tests.test_actions`
+  - `tests.test_monster_speeds`
+  - plus targeted on-hit/mastery tests from prior step continuation
+- Diagnostics clean in edited files after each patch cycle.
+
+### 📌 Resume Notes
+
+- Current gameplay loop remains level-1 focused with XP banking and optional on-hit activations.
+- Character creator now has separate weapon/armor selection screens with better detail-space.
+- Stealth system now uses LOS/range/perception checks; spells and attacks both break hiding.
+- Next best continuation remains Priority 0 seasonal-loop baseline and Phase 3 progression in `ROADMAP.md`.
+
+---
+
+## 📋 Session 10 - SRD Level-1 Feature Coverage Audit
+
+### ✅ COMPLETED THIS SESSION
+
+- Audited SRD level-1 class features from `SRD_CC_v5.2.1.md` against runtime implementation in `character.py`, `main_gui.py`, `gui.py`, and `spell_data.py`.
+- Confirmed currently implemented in runtime flow: Rage, Unarmored Defense, Second Wind, Lay On Hands, Bardic Inspiration, Sneak Attack, baseline Spellcasting.
+- Confirmed not yet implemented as gameplay mechanics (or only present as metadata text in `class_features.py`):
+  - Fighting Style
+  - Expertise (Rogue/Bard)
+  - Weapon Mastery
+  - Divine Order
+  - Druidic
+  - Primal Order
+  - Martial Arts
+  - Favored Enemy
+  - Arcane Recovery
+  - Innate Sorcery
+  - Eldritch Invocations / full Pact interactions
+  - Thieves’ Cant
+
+### 📌 Follow-up Tracking
+
+- Backlog was added to active TODOs and mirrored in `ROADMAP.md` under SRD level-1 parity work.
+- Recommended implementation order for next return session:
+  1. Fighter Fighting Style
+  2. Rogue/Bard Expertise
+  3. Weapon Mastery framework
 
 ---
 
@@ -49,837 +438,11 @@ This file documents the complete project state for reference when clearing chat 
 
 **Game Status:** Wave defense prototype with Phase 3 slice 1 live in runtime (v0.8.1)  
 **Phase Status:** Phase 1 ✅ | Phase 2 ✅ | Phase 3 (Slice 1) ✅  
-**Next Priority:** Phase 3 slice 2 - add one random event type and one keep upgrade path
+**Next Priority:** Complete Priority 0 seasonal-loop baseline (calendar + raid chaining + rest economy), then move to Phase 3 slice 2
 
 ---
 
-## 📋 Session 8 - Phase 2 Completion
+## 🗂️ Archive Note
 
-### ✅ COMPLETED THIS SESSION
-
-#### **Step 1: Character Sheet + Equipment UX Integration**
-- Added dedicated character-sheet popup with D&D-style sections (abilities, skills, proficiencies, equipment, inventory, attunement slots).
-- Added sheet actions and hotkeys (`C`/`I`) with modal behavior.
-- Added clickable equipment management from sheet (equip/unequip main hand, offhand, armor).
-
-#### **Step 2: Combat Visual Readability Upgrades**
-- Added enemy archetype visual colors and threat ring indicators.
-- Added on-map HP labels and panel legend for threat colors.
-
-#### **Step 3: Enemy Variety Expansion (Phase 2 requirement)**
-- Added multiple enemy archetypes in runtime waves:
-  - Orc
-  - Skeleton
-  - Troll
-  - Goblin Mage
-- Updated wave composition to mixed-roster spawns by wave tier.
-- Added distinct behaviors:
-  - Troll regeneration each enemy phase
-  - Healer support behavior for allied enemies
-  - Mage poison application chance on hit
-
-#### **Step 4: Remaining Feature Integration Gaps Closed**
-- Implemented Action Surge as a true extra-action economy gain (not just a message).
-- Added class-based Unarmored Defense formulas to AC:
-  - Barbarian: `10 + DEX + CON`
-  - Monk: `10 + DEX + WIS`
-- Added lightweight status-effect system with combat impact (`Poisoned` attack penalty) and UI status display.
-
-#### **Step 5: Test Coverage and Validation**
-- Added `tests/test_phase2_features.py` for:
-  - Unarmored Defense (Barbarian/Monk)
-  - Poisoned attack penalty
-  - Action economy gain for Action Surge
-- Expanded wave tests for mixed archetype coverage and late-wave Troll/Mage presence.
-- Focused Phase 2 validation suite passed:
-  - `tests.test_phase2_features`
-  - `tests.test_waves`
-  - `tests.test_healer`
-  - `tests.test_spells`
-  - `tests.test_species_traits`
-
-### 📊 Current Project State
-
-**Game Status:** Wave defense prototype with Phase 2 feature integration completed (v0.8.0)  
-**Phase Status:** Phase 1 ✅ | Phase 2 ✅ | Phase 3 planning next  
-**Next Priority:** Begin first constrained Phase 3 vertical slice
-
----
-
-## 📋 Session 7 - Spellcasting + Species Trait Completion
-
-### ✅ COMPLETED THIS SESSION
-
-#### **Step 1: Combat Spellcasting Framework**
-- Added centralized spell metadata and slot tables in `spell_data.py`.
-- Added level-1 caster spell selection requirements and options by class.
-- Added runtime spell slot tracking, slot display, and spell casting APIs in `character.py`.
-- Added spell actions to GUI with submenu behavior to reduce action bar clutter.
-
-#### **Step 2: Spell Combat Effects + AoE Preview**
-- Implemented combat effects for cantrips and level-1 combat spells.
-- Added AoE spell casting path and per-spell AoE shape metadata support.
-- Added live cursor-based AoE preview in GUI with valid/invalid coloring.
-- Fixed spell attack resolution to use spellcasting modifier + proficiency.
-
-#### **Step 3: Species Trait Mechanics Expansion**
-- Expanded species passives and actives in `character.py`:
-  - Dragonborn resistance + Breath Weapon usage scaling.
-  - Tiefling fire resistance and lineage magic support.
-  - Gnome mental save advantage support (Gnomish Cunning).
-  - Halfling Lucky d20 reroll behavior.
-  - Orc Relentless Endurance + Adrenaline Rush resource.
-  - Goliath ancestry resource tracking and large-form activation hooks.
-  - Dwarf resilience/toughness/stonecunning resource scaffolding.
-- Added species bonus-action UI actions in combat (`gui.py`/`main_gui.py`).
-
-#### **Step 4: Character Creation + Preset Integration**
-- Added spell selection flow to character creation for spellcasters.
-- Persisted selected spells/slots to presets and restored them on load.
-- Added species bonus-selection UI scaffolding for Human/Elf bonus choices.
-
-#### **Step 5: Test Coverage**
-- Added `tests/test_spells.py` and expanded `tests/test_species_traits.py`.
-- Added checks for slot usage, healing/cantrip behavior, Fire Bolt regression, AoE casting, and key species mechanics.
-
-### 📊 Current Project State
-
-**Game Status:** Wave defense prototype (v0.6.0) with combat spellcasting and expanded species trait handling  
-**Spellcasting:** Character creation + combat casting + slot tracking integrated  
-**Species Traits:** Core combat-relevant traits broadly implemented with automated tests  
-
----
-
-## 📋 Session 6 - Background ASI & Combat Improvements
-
-### ✅ COMPLETED THIS SESSION
-
-#### **Step 1: Fixed Level 1 HP Calculation (SRD-Compliant)**
-- **class_definitions.py UPDATED**
-  - HP formula corrected: `hit_die + CON modifier` (was using leveling-up formula)
-  - Now matches SRD 2024 exactly:
-    - Barbarian: 12 + Con, Fighter/Paladin/Ranger: 10 + Con
-    - Bard/Cleric/Druid/Monk/Rogue/Warlock: 8 + Con
-    - Sorcerer/Wizard: 6 + Con
-  - All tests still pass ✅
-
-#### **Step 2: Background Ability Score Increases (D&D 2024)**
-- **character_creation_data.py UPDATED**
-  - Added `BACKGROUND_ABILITY_SCORES` mapping all 16 backgrounds to 3 suggested abilities
-  - Used paraphrased PHB 2024 data for ability score suggestions
-- **character_creator_gui.py UPDATED**
-  - New screen: "Background ASI" between background and species selection
-  - Players choose: **+2/+1 split** OR **+1/+1/+1 to all three** suggested abilities
-  - Interactive button selection with visual feedback
-  - Applied after point buy, capped at 20
-- **Flow:** Class → Name → Point Buy → Background → **Background ASI** → Species → Skills → Feat → Review
-
-#### **Step 3: Removed Non-SRD Backgrounds**
-- **Removed Folk Hero and Urchin** (2014 PHB only, not in 2024 SRD)
-- Final count: **16 backgrounds** (Acolyte, Artisan, Charlatan, Criminal, Entertainer, Farmer, Guard, Guide, Hermit, Merchant, Noble, Sage, Sailor, Scribe, Soldier, Wayfarer)
-- Cleaned from: `character_creation_data.py`, `GAME_DESIGN.md`
-
-#### **Step 4: Two-Tier Obstacle System**
-- **main_gui.py & gui.py UPDATED**
-  - **Trees (70%):** Provide cover but DON'T block movement or line of sight
-    - Color: Dark green `(40, 90, 40)`
-    - Enemies can path through for better navigation
-  - **Rocks (30%):** Provide cover AND block movement + line of sight
-    - Color: Gray `(80, 80, 70)`
-    - Enemies path around these
-  - Both provide +2 AC cover bonus when adjacent
-  - Cover spans entire 64×64 map with 6-block gap around keep (up from 2-block)
-- **Result:** Dramatically improved enemy pathfinding while maintaining tactical cover
-
-### 📊 Current Project State
-
-**Game Status:** Wave defense prototype (v0.5.3) with full D&D 2024 character creation
-**Phase 1:** Complete ✅ (formula-based stats + background ASI integrated)
-**Combat System:** Functional with cover mechanics and improved obstacle pathfinding
-**All 15 Tests:** Passing ✅
-
----
-
-## 📋 Session 5 - Phase 1 Completion
-
-### ✅ COMPLETED THIS SESSION
-
-#### **Step 1: Formula-Based Defaults Everywhere**
-- **creator.py UPDATED**
-  - Terminal character creation now uses `generate_level_1_stats()` and ability scores
-  - Point-buy feeds directly into formula-based stat generation
-- **main.py UPDATED**
-  - Default player now uses `generate_level_1_stats()`
-  - Potion use/drop now uses SRD-aligned defaults (`create_potion_of_healing()`)
-- **main_gui.py UPDATED**
-  - Quick-start hero now uses `generate_level_1_stats()`
-- **character_creator_gui.py UPDATED**
-  - GUI creator fallback hero now uses `generate_level_1_stats()`
-
-#### **Step 2: Phase 1 Validation**
-- ✅ All 15 unit tests passing
-- ✅ No remaining hardcoded player presets in default flows
-- ✅ Terminal + GUI creation paths both formula-based
-
-### 📊 Current Project State
-
-**Game Status:** Wave defense prototype (v0.5) with SRD-aligned, formula-based stats
-**Phase 1:** Complete ✅ (formula-based stats integrated across all creation paths)
-**Next Priority:** Phase 2 - Feature Integration (class features in combat)
-
----
-
-## 📋 Session 4 - SRD Reference System & Long-Term Design Vision
-
-### ✅ COMPLETED THIS SESSION
-
-#### **Step 1: SRD 5.2.1 PDF Conversion**
-- **Converted SRD_CC_v5.2.1.pdf to Markdown**
-  - Used pdfplumber library for text extraction
-  - Split 343-page PDF into 8 organized reference documents:
-    - RULES_REFERENCE.md (core mechanics, combat, conditions)
-    - CLASS_REFERENCE.md (all 13 classes with features)
-    - SPECIES_REFERENCE.md (playable species/races)
-    - FEATS_REFERENCE.md (all feats and origin feats)
-    - EQUIPMENT_REFERENCE.md (weapons, armor, adventuring gear)
-    - SPELLS_REFERENCE.md (complete spell list)
-    - MAGIC_ITEMS_REFERENCE.md (magic item catalog)
-    - MONSTERS_REFERENCE.md (creature stat blocks)
-  - All docs properly attributed with CC BY 4.0 license
-  - Deleted original PDF (redundant after extraction)
-
-#### **Step 2: Removed External References**
-- **Eliminated all wikidot URLs** from codebase
-- **Deleted D&D_2024_REFERENCE.md** (obsolete external links)
-- **Updated all documentation** to reference local SRD docs only
-- **Files modified:**
-  - class_definitions.py (removed source_url field)
-  - DOCUMENTATION_STANDARDS.md (mandate SRD-only usage)
-  - README.md (updated reference section)
-  - ARCHITECTURE.md (SRD references)
-  - D&D_AUDIT_REPORT.txt (SRD references)
-
-#### **Step 3: Code Alignment with SRD Values**
-- **monsters.py UPDATED**
-  - Goblin variants now match official SRD stat blocks:
-    - Goblin Minion: AC 12, HP 7 (was generic scaling)
-    - Goblin Warrior: AC 15, HP 10 
-    - Goblin Boss: AC 17, HP 21
-  - Added proper SRD attributes (STR 8, DEX 14, CON 10, etc.)
-  
-- **items.py UPDATED**
-  - Added `create_potion_of_healing()` function
-  - SRD values: 2d4+2 HP (7 average), 50 GP cost
-  
-- **character.py UPDATED**
-  - `use_potion()` now defaults to amount=7 (SRD average)
-  - `heal_ally()` now defaults to amount=7 (SRD average)
-
-#### **Step 4: Class Features Aligned with SRD**
-- **class_features.py UPDATED** (9 features corrected)
-  - Barbarian Rage: Added full SRD details (B/P/S resistance, +2 damage, Advantage on STR, 10 rounds)
-  - Barbarian Unarmored Defense: Added AC formula (10 + DEX + CON, shield allowed)
-  - Bard Bardic Inspiration: Fixed to Bonus Action, CHA mod uses, 1-hour duration
-  - Cleric Channel Divinity: Clarified multiple effects (Turn Undead, healing, etc.)
-  - Cleric: Replaced incorrect "Healing Light" with correct "Divine Order" feature
-  - Fighter Second Wind: Corrected max_uses to 2 (1 on Short Rest, all on Long Rest)
-  - Rogue Sneak Attack: Updated recharge to "unlimited", clarified conditions
-  - Rogue Expertise: Standardized description (4 skills at level 9)
-  - Wizard Arcane Recovery: Clarified as Short Rest feature with proper formula
-
-#### **Step 5: Cleaned Up Redundant Documentation**
-- **Deleted 5 redundant files:**
-  - output.md (raw PDF extraction)
-  - pdf_to_md.py (conversion script, no longer needed)
-  - IMPLEMENTATION_SUMMARY.md (outdated summary)
-  - QUICKSTART.md (redundant with README)
-  - GUI_NOTES.md (merged into other docs)
-
-#### **Step 6: Long-Term Design Documentation**
-- **Created GAME_DESIGN.md** (600+ lines)
-  - Complete vision for kingdom management roguelike
-  - 9 development phases (current: Phase 2)
-  - Systems designed:
-    - Calendar & time management (months, days, raids)
-    - Keep building and territory management
-    - Resource economy (gold, scrap tiers, food, production)
-    - NPC recruitment and management
-    - Random event system with skill checks
-    - Advanced enemy AI and siege mechanics
-  - **Mandatory between-phase playtesting checklist**
-  - All design concerns addressed with resolutions
-
-- **Design Decisions Finalized:**
-  - ✅ Standard 5e grid system (not grid line movement)
-  - ✅ Siege escalation with specific turn counts (warning Round 7, siege Round 10)
-  - ✅ Monthly food budget (not daily tracking)
-  - ✅ Backgrounds balanced at 15-20% bonuses
-  - ✅ 30 foundation events for Phase 4
-  - ✅ Lenient exhaustion thresholds (4-5 raid days)
-  - ✅ Strict phase discipline with playtesting gates
-
-- **Updated ROADMAP.md**
-  - Added reference to GAME_DESIGN.md
-  - Emphasized Phase 2 focus before long-term features
-  - Added long-term vision summary
-
-- **Updated ARCHITECTURE.md**
-  - Added future architectural considerations
-  - Documented grid system decision
-  - Listed required modules for future phases
-
-### 📊 Current Project State
-
-**Game Status:** Wave defense prototype (v0.5) with SRD-aligned features  
-**Code Alignment:** All monster/item/healing stats match SRD 5.2.1  
-**Reference System:** 8 local SRD docs, all external refs removed  
-**Documentation:** Complete design vision with phased roadmap  
-**Next Priority:** Phase 2 - Feature Integration (class features in combat)
-
-**Files Added This Session:**
-- RULES_REFERENCE.md
-- CLASS_REFERENCE.md
-- SPECIES_REFERENCE.md
-- FEATS_REFERENCE.md
-- EQUIPMENT_REFERENCE.md
-- SPELLS_REFERENCE.md
-- MAGIC_ITEMS_REFERENCE.md
-- MONSTERS_REFERENCE.md
-- GAME_DESIGN.md
-
-**Files Modified This Session:**
-- monsters.py (SRD goblin stat blocks)
-- items.py (SRD potion values)
-- character.py (SRD healing defaults)
-- class_features.py (9 features aligned with SRD)
-- class_definitions.py (removed wikidot references)
-- ROADMAP.md (long-term vision link)
-- ARCHITECTURE.md (future systems, grid decision)
-- DOCUMENTATION_STANDARDS.md (SRD mandate)
-- README.md (updated references)
-- D&D_AUDIT_REPORT.txt (SRD references)
-- CHANGELOG.md (this file)
-
-**Files Deleted This Session:**
-- SRD_CC_v5.2.1.pdf
-- output.md
-- pdf_to_md.py
-- D&D_2024_REFERENCE.md
-- IMPLEMENTATION_SUMMARY.md
-- QUICKSTART.md
-- GUI_NOTES.md
-
----
-
-## 📋 Session 3 (Extended) - Ability Score System & Formula-Based Stats
-
-### ✅ COMPLETED THIS SESSION (STEPS 1-4 OF CORE MECHANICS FIX)
-
-#### **Step 1: Ability Score System to Character**
-- **character.py ENHANCED**
-  - Added `ability_scores` parameter: `{"STR": 15, "DEX": 12, ...}`
-  - New method: `get_ability_modifier(ability: str) -> int` 
-    - Formula: `(score - 10) // 2` (proper 2024 D&D)
-  - New method: `get_all_modifiers() -> dict` 
-    - Returns all 6 ability modifiers at once
-  - Ability scores are now first-class in Character model
-
-#### **Step 2: Calculate Modifiers From Ability Scores**
-- **class_definitions.py ENHANCED**
-  - New function: `get_ability_modifier(ability_score: int) -> int`
-  - Calculates modifier using proper D&D formula
-  - Used throughout stat generation pipeline
-
-#### **Step 3: Formula-Based Stat Generation (CRITICAL)**
-- **class_definitions.py NEW FUNCTION: `generate_level_1_stats()`**
-  - Generates level 1 stats directly from class + ability scores
-  - **HP Formula:** `(hit_die // 2 + 1) + CON modifier` ✅ 2024 D&D compliant
-  - **AC Formula:** Scales with armor type + DEX modifier bonus
-    - Heavy: 16 (plain)
-    - Medium: 12 + min(DEX, +2)
-    - Light: 11 + DEX
-    - Unarmored (Monk): 10 + DEX + WIS
-  - **Attack Bonus:** `STR/DEX modifier + proficiency bonus (+2 at level 1)` ✅
-  - **Damage Bonus:** `STR modifier` ✅
-  - **Initiative:** `DEX modifier` ✅
-  - Returns dict: `{hp, ac, attack_bonus, dmg_num, dmg_die, dmg_bonus, initiative_bonus, ability_scores}`
-
-- **DEFAULT_ABILITY_SCORES (NEW)**
-  - Standard array [15, 14, 13, 12, 10, 8] distributed per class
-  - Barbarian: STR 15, CON 14, WIS 13, DEX 12, INT 10, CHA 8
-  - Wizard: INT 15, DEX 14, CON 13, WIS 12, CHA 10, STR 8
-  - Monk: DEX 15, WIS 14, CON 13, STR 12, INT 10, CHA 8
-  - (All 13 classes configured)
-
-#### **Step 4: Sync CLASS_TEMPLATES with CLASS_DEFINITIONS**
-- **character_creator_gui.py REFACTORED**
-  - Changed from hardcoded `CLASS_TEMPLATES` lookup to `generate_level_1_stats()`
-  - Import added: `from class_definitions import generate_level_1_stats`
-  - `draw_review()` now shows:
-    - Ability scores (STR, DEX, etc.) with modifiers
-    - Calculated HP, AC, Attack, Damage, Initiative
-  - `_create_character()` passes `ability_scores` to Character.__init__()
-  - Deprecation: `CLASS_TEMPLATES` still exists but unused (kept for legacy)
-
-### 📊 VALIDATION & TEST RESULTS
-
-**All 15 unit tests passing** ✅
-- test_combat (6 tests)
-- test_leveling (2 tests)
-- test_loot (2 tests)
-- test_items (1 test)
-- test_waves (3 tests)
-- test_healer (2 tests)
-- test_actions (2 tests)
-
-**Character Creation Test Results:**
-```
-Barbarian:  STR 15 (+2), CON 14 (+2), DEX 12 (+1)
-  HP: 9 | AC: 13 | Attack: +4 | Damage: +2 | Initiative: +1
-  
-Fighter:    STR 15 (+2), CON 14 (+2), DEX 12 (+1)
-  HP: 8 | AC: 16 | Attack: +4 | Damage: +2 | Initiative: +1
-  
-Wizard:     INT 15 (+2), CON 13 (+1), DEX 14 (+2)
-  HP: 5 | AC: 12 | Attack: +1 | Damage: -1 | Initiative: +2
-  
-Cleric:     WIS 15 (+2), CON 14 (+2), STR 13 (+1)
-  HP: 7 | AC: 13 | Attack: +3 | Damage: +1 | Initiative: +1
-```
-
-### 🔄 CRITICAL BLOCKER STATUS
-
-**Was:** "Core Stat Calculations Not Formula-Based (CRITICAL BLOCKER)"
-**Now:** **RESOLVED** ✅
-
-Stat generation now follows 2024 D&D rules with traceable formulas:
-- ✅ HP derived from hit die + CON mod (not hardcoded)
-- ✅ AC scales with armor/DEX (not constant)
-- ✅ Attack/Damage based on ability modifiers
-- ✅ Initiative based on DEX (not initiative_bonus override)
-
-### 🎯 READY FOR STEP 5
-
-Integration capability unlocked. Features like Rage can now:
-- Check STR modifier for damage scaling
-- Check CON modifier for HP calculations
-- Use AC formula when calculating armor benefits
-- Properly adjust initiative based on DEX
-
-## 📋 Session 3 - EARLIER WORK (Class Features & Audit)
-
-### ✅ COMPLETED EARLIER THIS SESSION
-
-### ✅ COMPLETED THIS SESSION
-
-#### Part 1: Base Class Features System
-- **class_features.py** - Complete 2024 D&D-compliant feature system
-  - 13 classes with 1-4 features each (32 total features)
-  - ClassFeature class with usage tracking and recharge mechanics
-  - Features: Rage, Sneak Attack, Bardic Inspiration, Channel Divinity, etc.
-  - Support for "rest", "combat", "unlimited" recharge types
-  - Methods: `use()`, `restore()`, status tracking
-
-- **character.py UPDATED**
-  - Added `class_name` parameter to Character.__init__()
-  - Added `features` list loaded from class_features
-  - New methods: `use_feature()`, `get_feature()`, `get_available_features()`, `rest_features()`, `display_features()`
-
-- **character_creator_gui.py UPDATED**
-  - Shows class features in review screen
-  - Added import: `from class_features import get_class_feature_summaries`
-  - Passes `class_name` when creating Character
-
-#### Part 2: Critical 2024 D&D Rules Audit
-- **IDENTIFIED CRITICAL ISSUE**: Core stats are hardcoded, not formula-based
-  - HP values: hardcoded (Barbarian 35, should be 14 = d12 + CON+2)
-  - AC values: hardcoded, no armor/DEX connection
-  - Attack Bonus: hardcoded, should be ability mod + proficiency
-  - Initiative: hardcoded, should be DEX modifier only
-  - Damage Bonus: hardcoded, should be ability modifier
-
-- **class_definitions.py** - VERIFIED 2024 D&D source data
-  - All 13 classes with hit dies from SRD 5.2.1 reference docs
-  - Source URLs for verification
-  - ClassDefinition with calculation methods (properly formula-based)
-  - Example: `calculate_hp(level, con_mod)` uses d12 + con_mod
-  - Proficiency bonus table correct (2024 D&D)
-
-- **D&D_AUDIT_REPORT.txt** - Detailed findings document
-  - Shows all discrepancies with examples
-  - Links to official 2024 D&D sources
-  - Recommends integration path forward
-
-- **DND_RULES_VERIFICATION.txt** - Problem documentation
-  - Lists what should be fixed
-  - Specifies 2024 D&D formulas for each stat
-
-### ✅ TEST STATUS
-- **15/15 Unit Tests**: PASSING ✓
-- **Syntax Check**: All files compile ✓
-- **Feature System**: Verified working (passive + limited features) ✓
-
-### 📊 FILES MODIFIED/CREATED
-
-**Modified:**
-- character.py (added class_name, features list, feature methods)
-- character_creator_gui.py (added feature display, class_name parameter)
-- CHANGELOG.md (this file)
-- ROADMAP.md (updated priorities)
-
-**Created:**
-- class_features.py (32 features for 13 classes)
-- class_definitions.py (verified 2024 D&D class data)
-- D&D_AUDIT_REPORT.txt (audit findings)
-- DND_RULES_VERIFICATION.txt (problem details)
-
-### ⚠️ CRITICAL NEXT STEPS (HIGH PRIORITY)
-
-1. **Implement Ability Score System** (BLOCKING - core foundation)
-   - Add STR, DEX, CON, INT, WIS, CHA to Character class
-   - Use standard array [15, 14, 13, 12, 10, 8] or point buy
-   - Calculate modifiers: (score - 10) // 2
-
-2. **Replace Hardcoded Stats with Formula-Based Calculations**
-   - HP = Hit Die + CON modifier per level
-   - AC = Armor type + DEX modifier (varies by armor)
-   - Attack Bonus = ability mod + proficiency bonus
-   - Initiative = DEX modifier
-   - Damage Bonus = ability modifier (STR/DEX per weapon)
-
-3. **Integrate class_definitions.py** 
-   - Use ClassDefinition.calculate_hp() for proper formula
-   - Use ClassDefinition.get_proficiency_bonus() for level-based bonus
-   - Reference source URLs in code comments
-
-4. **Update Character Creator GUI**
-   - Show ability score selection
-   - Display calculated stats (not hardcoded values)
-   - Show armor selection for AC calculation
-
-### 📚 DOCUMENTATION COMPLETE
-All findings documented in traceable files:
-- class_definitions.py has all verified sources with links
-- D&D_AUDIT_REPORT.txt shows discrepancies
-- ROADMAP.md updated with integration tasks
-- Each file has purpose-specific documentation
-
----
-
-## 📊 COMPLETE PROJECT STATE
-
-### ✅ FULLY WORKING
-- Terminal game (main.py) - playable, all mechanics
-- Pygame GUI (main_gui.py) - 64×64 grid, combat, character creator
-- Character creation (interactive and GUI)
-- Combat system (D&D 5.5e initiative, attacks, crits, healing)
-- Leveling/XP progression
-- Loot/gold system
-- Item drops (potions)
-- Class features (32 defined across 13 classes)
-- 15 unit tests (all passing)
-
-### ⚠️ NEEDS FIXING (HIGH PRIORITY)
-- **Core stat formulas** - currently hardcoded, blocking realistic gameplay
-- **Ability scores** - not in character system yet
-- **AC calculation** - not armor-dependent
-- **HP scaling** - doesn't use CON modifier
-- **Attack/Damage** - not ability-score based
-
-### 🎮 HOW TO RUN
-```powershell
-# GUI with character creator
-py -3.11 main_gui.py
-
-# Terminal version
-python main.py --interactive
-
-# Run tests
-python -m unittest discover tests
-```
-
-### 📝 KEY REFERENCE FILES
-- **class_definitions.py** - Verified 2024 D&D class data (use this for formulas)
-- **class_features.py** - All 13 classes' features
-- **character.py** - Character class (needs ability scores added)
-- **D&D_AUDIT_REPORT.txt** - What needs to be fixed and why
-- **ROADMAP.md** - Next task priorities
-
----
-
-## NEXT SESSION CHECKLIST
-
-When resuming work:
-
-1. ✅ Read **D&D_AUDIT_REPORT.txt** - understand what needs fixing
-2. ✅ Review **class_definitions.py** - see verified 2024 D&D formulas
-3. ✅ Start with **ability score system** in character.py
-4. ✅ Update Character.__init__() to use formulas instead of hardcoded values
-5. ✅ Test with unit tests
-6. ✅ Update GUI to show ability scores and calculated stats
-7. ✅ Reference SRD 5.2.1 docs in this repo for any questions
-
-All groundwork is complete - ready for implementation phase!
-
----
-
-## SESSION 2 SUMMARY (2026-02-08)
-
-### ✅ Completed
-- Turn-based GUI gameplay with pauses
-- Full 3-screen GUI character creator
-- Python 3.11 environment setup
-- Linting fixed (0 errors)
-- Pygame validated
-
----
-
-## SESSION 1
-
-Initial project setup and core mechanics implementation.
-
-- Pygame requires Python 3.11 (3.14 has distutils)
-- GUI characters shown as circles, no sprite graphics yet
-- Enemy AI basic (straight pathfinding)
-
-## 🎮 Game Overview
-
-**Genre:** Tactical roguelike wave-survival with D&D 5.5e combat
-
-**Two Play Modes:**
-1. **Terminal** (main.py) - Text-based, full interactivity, colorized
-2. **Pygame GUI** (main_gui.py) - Visual grid, turn-based, character creator
-
-**Core Loop:**
-- Choose/create character
-- Enemies spawn in waves 
-- Player fights to win XP, gold, loot
-- Level up to gain stats
-- Survive N waves to win
-
-## Project snapshot (2026-02-08, Session 2)
-- Language: Python 3.14 (tests/terminal) + Python 3.11 (Pygame)
-- Tests: `unittest` (15 tests, 100% passing)
-- GUI Framework: Fully functional and tested
-- Files: 14 Python files + 5 .md docs (ARCHITECTURE, ROADMAP, QUICKSTART, README, GUI_NOTES)
-
-## Key modules
-- `main.py`: interactive terminal combat with colors
-- `main_gui.py`: pygame main loop, turn-based gameplay
-- `gui.py`: pygame rendering (grid, keep, characters, UI panel)
-- `character_creator_gui.py`: pygame GUI character creator (12 classes)
-- `character.py`: Character model with D&D mechanics
-- `waves.py`: Enemy spawning with wave scaling
-- `creator.py`: Terminal character creator (fallback)
-- `colors.py`: ANSI color codes for terminal UI
-- Support: `dice.py`, `monsters.py`, `items.py`
-- `tests/`: unit tests covering combat, initiative, items, healer, loot, and leveling.
-
-## Design decisions / mechanics
-- Initiative: d20 + initiative bonus; tied totals use an extra d20 tie-break roll.
-- Attacks: d20 + attack bonus; natural 20 is a crit (extra damage dice).
-- Loot & XP: enemies have `bounty`; killing grants gold and `XP = bounty * 10`.
-- Leveling: XP-to-next-level = `100 * level`. On level up: +1 level, +5 max HP (heal up to +5), +1 attack bonus, +1 AC every 2 levels.
-- Items: simple `Potion` item increments `Character.potions` when added.
-- Character creator: 12-class presets + optional 27-point buy (scores 8–15; 5e-style costs). Point-buy affects HP, attack, damage, AC, and initiative via ability modifiers.
-
-## How to run
-Run the demo:
-```powershell
-python main.py --interactive --seed 42
-```
-
-Use the creator before running:
-```powershell
-python main.py --create-character --interactive
-```
-
-Run tests:
-```powershell
-python -m unittest discover -s tests -p "test_*.py" -v
-```
-
-### GUI Version (requires Python 3.11+)
-```powershell
-# Install pygame first
-pip install pygame
-
-# Then run GUI
-python main_gui.py --seed 42 --waves 3
-```
-
-## 🔧 Architecture & Modules
-
-### Core Game Engine
-- **character.py** - Character class with all D&D mechanics
-  - Stats: HP, AC, attack_bonus, dmg_num, dmg_die, dmg_bonus
-  - Systems: initiative, attack rolls, defense, leveling, XP
-  - Methods: roll_initiative(), attack(), defend(), add_xp(), use_potion()
-
-- **dice.py** - Dice rolling utilities
-  - roll_die(sides) - single d-sided roll
-  - roll_dice(num, die) - multiple rolls
-
-- **items.py** - Item system
-  - Item dataclass
-  - Potion healing mechanics
-  - Inventory management
-
-- **waves.py** - Enemy spawning
-  - spawn_wave(wave_num) - creates scaled enemy groups
-  - Scaling: HP/damage increase by 10% per wave
-
-- **creator.py** - Character creation
-  - 12 D&D class presets
-  - 27-point ability score buy system
-  - Point-buy to character stat conversion
-
-### Terminal UI
-- **main.py** - Terminal game loop
-  - run_combat(player, enemies, interactive)
-  - compute_initiative_order()
-  - Player input handling
-  - Round-by-round turn system
-
-- **colors.py** - Text formatting
-  - ANSI color codes
-  - Helper functions (success, error, info, etc.)
-
-### Pygame GUI (New - 2026-02-08)
-- **gui.py** - Rendering engine
-  - GameWindow class
-  - draw_grid(), draw_keep(), draw_character()
-  - Screen/grid coordinate conversion
-  - Input handling (mouse, keyboard)
-
-- **main_gui.py** - GUI game loop
-  - GameState class (positions, messages)
-  - move_player(), move_enemies()
-  - resolve_combat()
-  - 60 FPS game loop
-
-### Tests
-- **test_combat.py** - Attack/defense/initiative (7 tests)
-- **test_actions.py** - Defend/heal (2 tests)
-- **test_healer.py** - Healing allies (2 tests)
-- **test_items.py** - Item drops (1 test)
-- **test_leveling.py** - XP/leveling (1 test)
-- **test_loot.py** - Gold collection (1 test)
-- **test_waves.py** - Wave scaling (1 test)
-
-## Recent Changes (Current Session)
-
-### ✅ QoL Improvements
-- Color-coded terminal UI (green for success, red for danger, etc.)
-- Better action menu formatting
-- Health bars for enemies
-- Improved round summaries
-
-### ✅ GUI Implementation
-- Created Pygame rendering system
-- Implemented 64×64 grid with 8×8 keep area
-- Enemy pathfinding toward player
-- Click-to-move within keep
-- Adjacent combat detection
-- Real-time game loop (60 FPS)
-- Health bars above characters
-- UI panel with stats
-
-## Next Steps / TODOs
-
-### High Priority
-1. **Pygame Compatibility** - Test on Python 3.11 with pygame
-2. **GUI Polish** - Add sprite characters, better visuals
-3. **Game Feel** - Add sound effects, visual feedback
-
-### Medium Priority
-1. **More Enemy Types** - Different behaviors (ranged, melee, healer)
-2. **Skill System** - Class-specific abilities beyond attack
-3. **Difficulty Scaling** - Modifiers for wave difficulty
-4. **Pause Menu** - In-game settings and stats
-
-### Nice to Have
-1. **Leaderboard** - Track best runs
-2. **Save/Load** - Continue games between sessions
-3. **Map Generation** - Obstacles on grid
-4. **Animation** - Attack/movement feedback
-5. **Multiplayer** - Co-op wave defense
-
-## File Structure
-
-```
-dnd_roguelike/
-├── main.py                    (Terminal entry point)
-├── main_gui.py                (Pygame entry point)
-├── gui.py                     (Pygame rendering)
-├── character.py               (Core mechanics)
-├── creator.py                 (Character creation)
-├── waves.py                   (Enemy spawning)
-├── items.py                   (Item system)
-├── dice.py                    (Dice utilities)
-├── colors.py                  (Terminal colors)
-├── monsters.py                (Enemy definitions)
-├── tests/                     (15 unit tests)
-├── README.md                  (User guide)
-├── CHANGELOG.md               (This file)
-├── IMPLEMENTATION_SUMMARY.md  (Technical overview)
-├── GUI_NOTES.md               (GUI development notes)
-├── QUICKSTART.md              (Quick reference)
-└── .gitignore
-```
-
-## How AI Should Approach Development
-
-When AI continues this project after chat clear:
-
-1. **Always run tests first** - `python -m unittest discover`
-2. **Reference CHANGELOG.md** - Understand current state
-3. **Check IMPLEMENTATION_SUMMARY.md** - See architecture
-4. **Look at GUI_NOTES.md** - Understand pygame setup
-5. **Terminal version is stable** - Don't break it (test after changes)
-6. **GUI needs Python 3.11** - Document this clearly
-7. **Keep both versions in sync** - Changes to characters/combat affect both
-
-## Known Issues & Workarounds
-
-### Issue: ModuleNotFoundError: pygame
-**Cause:** Python 3.14 doesn't have distutils  
-**Solution:** Switch to Python 3.11 and install pygame
-
-### Issue: Terminal colors don't show
-**Cause:** Some terminals don't support ANSI colors  
-**Workaround:** Redirect output to file: `python main.py > game.txt`
-
-### Issue: GUI unresponsive on Windows
-**Cause:** Pygame needs to pump events  
-**Fix:** Already handled in main loop with handle_events()
-
-## Performance Notes
-
-- Terminal version: instant (text-only)
-- Pygame GUI: 60 FPS target (achieves ~60 with current code)
-- Test suite: <0.01 seconds (15 tests)
-- Grid render: O(grid_size) complexity, optimized drawing
-
-## If you clear chat and come back:
-
-1. Read CHANGELOG.md completely
-2. Run: `python -m unittest discover -s tests -p "test_*.py" -v`
-3. Try: `python main.py --interactive --seed 42`
-4. Check IMPLEMENTATION_SUMMARY.md for architecture questions
-5. Look at GUI_NOTES.md if working on pygame
-
-The project is well-tested and documented. Good luck!
-git push
-```
-2. Save this file (`CHANGELOG.md`) — it contains the short project state.
-3. Clear the chat to reset the model context; when you reopen, point me to this repo and I can continue working from files.
-
-## Next suggested tasks
-- Add `README` section documenting the creator + point-buy (small, done-on-request).
-- Add save/load for created characters (`characters/` JSON files).
-- Add unit tests for `creator.py` (simulate inputs using `unittest.mock`).
-- Add CI (GitHub Actions) to run tests on push.
-
----
-Generated by the assistant as a compact project snapshot — keep in repo as canonical context.
+Older session entries were intentionally trimmed to keep this file focused and maintainable.
+Full historical detail remains available in git history.

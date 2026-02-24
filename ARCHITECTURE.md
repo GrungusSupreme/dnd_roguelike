@@ -1,7 +1,7 @@
 # Architecture & Design Document
 
-**Date:** 2026-02-09 (Updated: Ability Score System)  
-**Status:** Core mechanics formula-based (2024 D&D), GUI framework complete  
+**Date:** 2026-02-22 (Updated: Fog of War + Directional Raids)  
+**Status:** Core mechanics formula-based (2024 D&D), GUI framework complete, origin feats live, cover SRD-compliant, fog of war live  
 **Python:** 3.11+ for gameplay, 3.14 tests only (no pygame on 3.14)
 
 ---
@@ -57,11 +57,26 @@ get_ability_modifier(ability: str) -> int  # Get ability mod (STR, DEX, CON, INT
 get_all_modifiers() -> dict                 # Get all 6 modifiers at once
 attack(target)              # Roll d20 vs AC, apply damage
 defend(ac_bonus=2)          # Increase AC for one round
-roll_initiative()           # Roll d20 + init_bonus
-use_potion(healing_amount)  # Heal self, consume potion
+roll_initiative()           # Roll d20 + init_bonus (+ PB if Alert feat)
+use_potion(healing_amount)  # Heal self, consume potion (rolls 2d4+2)
 add_xp(amount)              # Check for level up
 heal_ally(target, amount)   # Heal another character
+has_origin_feat(keyword)    # Check if character has feat matching keyword
+_initialize_origin_feats()  # Apply feat effects at creation
+_roll_dice_reroll_ones()    # Roll dice, rerolling 1s (Healthy/Iron Fist)
+get_buy_cost(base_price)    # Apply Crafty 20% discount if applicable
 ```
+
+**Origin Feat System:**
+All 10 origin feats are applied via `_initialize_origin_feats()` called from `__init__`.
+- **Alert:** +PB to initiative in `roll_initiative()`
+- **Magic Initiate (Cleric/Druid/Wizard):** Grants cantrips + level-1 spell, free once/long-rest cast, dedicated slot for non-casters. Uses `_get_mi_class()` to extract class. Spellcasting ability set per MI class.
+- **Savage Attacker:** Double-roll damage in `attack()`, once per turn (reset in `start_turn()`)
+- **Skilled:** +3 skill proficiencies via character creator
+- **Crafty:** +3 tool proficiencies via creator, 20% gold discount in `get_buy_cost()`
+- **Healthy:** Reroll 1s on healing dice (spells + potions) via `_roll_dice_reroll_ones()`
+- **Iron Fist:** Reroll 1s on unarmed strikes via `_roll_dice_reroll_ones()`
+- **Meaty:** +2 HP at creation and per level-up
 
 **Mechanics:**
 - Attack: `d20 + attack_bonus` vs `target.ac`
@@ -141,7 +156,8 @@ class Item:
 ```
 
 ### monsters.py - Enemy Definitions
-Pre-defined enemy types (Goblin, Goblin Archer, Champion, etc.)
+Pre-defined enemy types (Goblin, Goblin Archer, Champion, Goblin Skulk, etc.)  
+**Archetypes:** basic, ranged, tank, healer, sneaky — each with unique behavior and stats
 
 ### colors.py - Terminal UI Formatting
 **Color Codes:**
@@ -248,11 +264,62 @@ main_gui.py
 - `selected_target` - Current focus
 - `message` - UI message
 - `message_timer` - Frames left to display
-- `trees` - Set of (x, y) tree positions (cover only, passable)
-- `rocks` - Set of (x, y) rock positions (cover + blocking)
+- `trees` - Set of (x, y) tree positions (Half Cover +2 AC, passable)
+- `rocks` - Set of (x, y) rock positions (Three-Quarters Cover +5 AC, blocking)
 - `actions_remaining` - Player actions left this turn
 - `movement_used` - Movement spent this turn
 - `movement_max` - Maximum movement per turn
+- `raid_sides` - List of sides enemies raid from (e.g. `['north', 'east']`)
+- `_visible_cells` - Set of (x, y) cells currently visible to player (fog of war cache)
+- `hidden_enemies` - Set of enemies currently in stealth (invisible to player)
+- `_enemy_turn_index` - Index into enemy list during staggered turn processing
+- `_processing_subphase` - Sub-state within processing phase: `"idle"` → `"resolving_enemies"` → `"cleanup"`
+
+### Fog of War System
+**Vision Range:** `_player_vision_range()` returns cells: base 10 + Perception bonus + darkvision/5
+
+**Visibility:** `compute_player_visibility()` uses Chebyshev distance + Bresenham LOS
+- Rocks block line of sight; trees do not
+- Called on: init, `move_player()`, Cloud Jaunt teleport, gate passage
+- `is_cell_visible(x, y)` — lazy accessor, auto-recomputes if cache is stale
+
+**Rendering:** Dark overlay on non-visible cells; enemies in fog fully hidden
+
+**Targeting:** All attack/spell methods reject fogged targets ("You can't see that area.")
+- Exception: Self-centred AoE (e.g. Thunderwave `burst_self`) bypasses fog check
+
+### Raid Direction System
+**Spawning:** `add_enemies()` picks 1-3 random sides, always leaving ≥1 free
+- Enemies placed within 3 cells of their assigned edge
+- Horn blast message generated and displayed at wave start
+
+**Rendering:** Red glow bars along raided edges + directional labels (▼ N, ▲ S, ▶ W, ◀ E)
+
+### Staggered Enemy Turns
+Enemy actions resolve one at a time with `pause_frames = 90` (1.5s) between each:
+1. `"idle"` → Snapshot positions, move enemies, check AoO triggers
+2. `"resolving_enemies"` → `_resolve_single_enemy(enemy)` called per enemy via `_enemy_turn_index`
+3. `"cleanup"` → Remove dead enemies from `hidden_enemies`, end round, return to `"player_input"`
+
+### Enemy Stealth System
+**Sneaky archetype:** Goblin Skulk (`behavior="sneaky"`) — spawns hidden, attacks with advantage + sneak attack dice, can re-stealth behind rocks.
+
+**Stealth tracking:** `hidden_enemies: set` in GameState. Hidden enemies are invisible in GUI, untargetable by single-target attacks, but hit by AoE.
+
+**Detection:** `_check_player_perception_vs_hidden_enemies()` — Active roll (d20 + Perception bonus) vs enemy stealth total. Called at start of player turn. Silent on failure.
+
+**Re-stealth:** `_enemy_attempt_re_stealth(enemy)` — Requires adjacency to rock (cover). Contested active Perception roll. Silent on failure.
+
+**Attack from stealth:** Sets `_stealth_advantage` flag on Character → advantage ("Unseen Attacker") + sneak attack bonus d6s. Enemy revealed after attacking.
+
+### Cover System
+**Method:** `_cover_bonus(attacker_pos, target_pos) -> int`
+- Uses Bresenham ray tracing from attacker to target
+- For each obstacle adjacent to target, checks dot-product with ray direction
+- Only obstacles between attacker and target provide cover (directional)
+- Trees = Half Cover (+2 AC), Rocks = Three-Quarters Cover (+5 AC)
+- Takes the highest applicable bonus
+- Applied to: player melee/ranged attacks, spell attacks, enemy ranged attacks
 
 ### Game Window: `GameWindow`
 **Rendering Methods:**
@@ -302,7 +369,7 @@ handle_events()  # Returns clicked (x,y) or None
 
 **Framework:** `unittest` (standard library)  
 **Files:** `tests/test_*.py`  
-**Count:** 15 tests, 100% passing
+**Count:** 230 tests, all passing
 
 ### Test Breakdown
 | File | Tests | Focus |
@@ -418,7 +485,7 @@ else:
 
 ### Current Limitations
 - No ranged mechanics (all melee)
-- Limited enemy behaviors (basic attack vs heal)
+- Limited enemy behaviors (basic attack, heal, sneaky stealth)
 - Simple pathfinding (straight line to player)
 - No obstacles or terrain
 - No status effects (poison, stun, etc.)
@@ -487,10 +554,10 @@ python main_gui.py --seed 42
 
 **See [GAME_DESIGN.md](GAME_DESIGN.md) for full long-term vision.**
 
-The current architecture (v0.5) supports wave-based tactical combat. Future phases will require these structural additions:
+The current architecture (v0.8.1) supports wave-based tactical combat plus early keep/calendar integration. Future phases will require these structural additions:
 
 **Phase 3: Calendar & Time System**
-- New module: `calendar.py` - Day/month tracking, raid scheduling
+- New module: `calendar.py` - Day/season tracking, raid scheduling
 - Extended `character.py` - Exhaustion tracking, rest state management
 - New module: `rest_system.py` - Long/short rest logic
 
@@ -537,12 +604,16 @@ The current architecture (v0.5) supports wave-based tactical combat. Future phas
 
 | Date | Version | Changes |
 |------|---------|---------|
+| 2026-02-22 | 0.8.6 | Staggered enemy turns, enemy stealth system (Goblin Skulk), 230 tests |
+| 2026-02-22 | 0.8.4 | Fog of war, directional raids, horn blasts, 175 tests |
+| 2026-02-20 | 0.8.2 | Origin feats live (10 feats), cover SRD-compliant, 119 tests |
+| 2026-02-14 | 0.8.1 | Phase 3 Slice 1 foundation (calendar + keep resource loop) |
 | 2026-02-10 | 0.5 | Ability scores, SRD alignment, long-term vision documented |
 | 2026-02-08 | 0.2 | Pygame GUI + Enhanced UI |
 | Previous | 0.1 | Base game + tests |
 
 ---
 
-**Last Updated:** 2026-02-10  
-**Maintainer Notes:** This project is well-structured and tested. New developers should read CHANGELOG.md, ARCHITECTURE.md, and GAME_DESIGN.md for full context. Current focus: Phase 2 feature integration.
+**Last Updated:** 2026-02-22  
+**Maintainer Notes:** This project is well-structured and tested. New developers should read CHANGELOG.md, ARCHITECTURE.md, and GAME_DESIGN.md for full context. Current focus: Phase 3 seasonal-loop baseline completion (Priority 0 in ROADMAP).
 

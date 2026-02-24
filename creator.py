@@ -7,9 +7,12 @@ from character import Character
 from class_definitions import generate_level_1_stats, get_default_ability_scores
 from character_creation_data import (
     ABILITY_CODES,
-    ALL_SKILLS,
+    class_has_weapon_mastery,
+    class_is_weapon_proficient,
+    get_class_weapon_mastery_count,
+    get_class_skill_selection,
+    get_class_tool_selection,
     ORIGIN_FEAT_OPTIONS,
-    TOOL_PROFICIENCY_OPTIONS,
 )
 from spell_data import get_class_spell_options, get_spellcasting_requirements, is_spellcaster_class
 
@@ -182,8 +185,31 @@ def create_character_interactive():
             ability_scores[ability] = min(20, ability_scores[ability] + 1)
 
     origin_feat = _choose("Choose an origin feat:", [(f, f) for f in ORIGIN_FEAT_OPTIONS])
-    skills = _choose_multiple("Choose two skill proficiencies:", ALL_SKILLS, 2)
-    tool = _choose("Choose a tool proficiency:", [(t, t) for t in TOOL_PROFICIENCY_OPTIONS])
+    class_skill_options, class_skill_count = get_class_skill_selection(pick)
+    if class_skill_count > 0:
+        skills = _choose_multiple(
+            f"Choose {class_skill_count} class skill proficiencies:",
+            class_skill_options,
+            class_skill_count,
+        )
+    else:
+        skills = []
+
+    class_tool_options, class_tool_count = get_class_tool_selection(pick)
+    if class_tool_count == 0:
+        tools = []
+    elif class_tool_count == 1 and len(class_tool_options) == 1:
+        tools = [class_tool_options[0]]
+        print(f"Class tool proficiency granted: {tools[0]}")
+    elif class_tool_count == 1:
+        tool = _choose("Choose a class tool proficiency:", [(t, t) for t in class_tool_options])
+        tools = [tool]
+    else:
+        tools = _choose_multiple(
+            f"Choose {class_tool_count} class tool proficiencies:",
+            class_tool_options,
+            class_tool_count,
+        )
 
     selected_spells = []
     if is_spellcaster_class(pick):
@@ -198,6 +224,23 @@ def create_character_interactive():
         if spell_count > 0:
             selected_spells.extend(
                 _choose_multiple("Choose level 1 spells:", options.get("spells", []), spell_count)
+            )
+
+    selected_weapon_masteries = []
+    if class_has_weapon_mastery(pick):
+        from items import WEAPONS
+
+        mastery_count = get_class_weapon_mastery_count(pick)
+        mastery_options = [
+            weapon_name
+            for weapon_name, weapon in sorted(WEAPONS.items())
+            if class_is_weapon_proficient(pick, weapon_name, weapon)
+        ]
+        if mastery_count > 0 and mastery_options:
+            selected_weapon_masteries = _choose_multiple(
+                f"Choose {mastery_count} weapon kinds for Weapon Mastery:",
+                mastery_options,
+                mastery_count,
             )
 
     stats = generate_level_1_stats(pick, ability_scores)
@@ -216,7 +259,8 @@ def create_character_interactive():
         ability_scores=stats["ability_scores"],
         attack_range=class_ranges.get(pick, 1),
         skill_proficiencies=skills,
-        tool_proficiencies=[tool],
+        tool_proficiencies=tools,
+        weapon_masteries=selected_weapon_masteries,
         origin_feats=[origin_feat],
         spells=selected_spells,
         gold=50,

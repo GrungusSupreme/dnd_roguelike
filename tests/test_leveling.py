@@ -23,6 +23,13 @@ class TestLeveling(unittest.TestCase):
         # player should have leveled up to level 2
         self.assertGreaterEqual(self.player.level, 2)
 
+    def test_action_surge_unlocks_at_level_two(self):
+        fighter = character.Character("Fighter", hp=20, ac=16, attack_bonus=5, dmg_num=1, dmg_die=8, class_name="Fighter")
+        self.assertIsNone(fighter.get_feature("Action Surge"))
+
+        fighter.level_up()
+        self.assertIsNotNone(fighter.get_feature("Action Surge"))
+
 
 if __name__ == "__main__":
     unittest.main()

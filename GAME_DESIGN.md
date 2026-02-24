@@ -1,15 +1,15 @@
 # Game Design Vision - Long Term Development
 
-**Status:** Design Phase - Not Yet Implemented  
-**Last Updated:** 2026-02-10  
-**Current Version:** 0.5 (Wave Defense Prototype)  
+**Status:** Design-Led Document - Partially Implemented in Runtime (Phase 3 Slice 1 live)  
+**Last Updated:** 2026-02-17  
+**Current Version:** 0.8.1 (Wave Defense Prototype + early Phase 3 slices)  
 **Target Version:** 2.0+ (Kingdom Defense Roguelike)
 
 ---
 
 ## Overview
 
-Transform the current wave-based tactical combat game into a comprehensive kingdom management roguelike where players defend their keep against raids while building up infrastructure, managing resources, and recruiting NPCs over the course of months and years.
+Transform the current wave-based tactical combat game into a comprehensive kingdom management roguelike where players defend their keep against raids while building up infrastructure, managing resources, and recruiting NPCs over the course of seasons and years.
 
 **Core Pillars:**
 1. **Tactical Combat** - D&D 5.5e SRD-based combat on tactical grid
@@ -25,55 +25,80 @@ Transform the current wave-based tactical combat game into a comprehensive kingd
 ### Calendar System
 
 **Structure:**
-- Game divided into **Months**
-- Each month contains **Days** (exact number TBD, suggest 28-30)
+- Game divided into **Seasons** (fixed 25 days each)
+- Season order: **Spring → Summer → Winter → Fall → repeat**
+- One full year = **100 days** (4 seasons/quarters)
+- Character level-up timing target: **end of each year**
 - Each day acts as a **turn** with "End Day" button
 
 **Daily Activities:**
 Players can experience one of the following per day:
 1. **Raid Day** - Combat encounter(s) against enemy waves
-2. **Long Rest Day** - Dedicated rest to recover resources
+2. **Long Rest Day** - Day ends and long rest resolves if required resources are paid
 3. **Event Day** - Random narrative event with choices/skill checks
 4. **Free Day** - Crafting, trading, farming, or building activities
+
+**Season Baseline (Current Design Target):**
+- Raid schedule for the full season is generated at season start (supports future scouting/forecasting)
+- Total raids per season = `10 × player_level` (temporary balancing rule)
+- Per-day raid cap = `2 × player_level` (temporary balancing rule)
+- Raids are distributed randomly across season days, allowing multiple raids on one day up to cap
+- Pressing "End Day" on a day with pending raids starts the next scheduled raid for that same day
+- Only when no raids remain for the current day does day advancement occur
 
 ### Raid Scheduling
 
 **Raid Frequency:**
-- Number of raids per month determined by:
-  - Player level (higher level = more frequent raids)
-  - Keep threat level (upgrades may attract attention)
-  - Story progression flags
-  - Random variation
+- Current baseline formula: `10 × player_level` raids per season
+- Future state may additionally factor keep threat, story progression, and random variation
 
 **Raid Forecasting:**
-- Base: Raids occur on random days with no warning
+- Base: All raids are pre-scheduled at season start and occur on randomized days
 - Improvements available via:
   - Skill proficiencies (Perception, Survival)
   - Class abilities (Ranger features, Divination magic)
   - Keep upgrades (watchtowers, scouts)
   - NPC specialists (scouts, diviners, or similar roles)
 
+**Multi-Raid Day Flow:**
+- After each raid, player automatically receives short rest benefits
+- Reward screen appears after each raid before player movement/free actions resume
+- Player can move and act freely, then press "End Day" when ready
+- If additional raids are scheduled that day, "End Day" starts next raid
+- Day only ends once all scheduled raids for that day are completed
+
 **Example Progression:**
-- Level 1-3: 2-3 raids per month, no forecasting
-- Level 4-6: 3-4 raids per month, 1-day warning with upgrades
-- Level 7-9: 4-5 raids per month, 2-3 day warning with upgrades
-- Level 10+: 5-6 raids per month, up to 5-day warning with full forecasting
+- Level 1: 10 raids/season, max 2 raids/day
+- Level 3: 30 raids/season, max 6 raids/day
+- Level 5: 50 raids/season, max 10 raids/day
+- Forecast precision improves later through scouting systems (Phase 4+)
 
 ### Rest Mechanics
 
 **Long Rest:**
-- Requires a **full day** with no raid
-- Can only be taken if no raid occurs that day
-- If player has recently taken long rest and not been raided, they remain "rested" (no time spent)
-- Restores: HP, spell slots, class feature uses, removes exhaustion levels
+- Triggered when ending a day with no further raids scheduled
+- If day had **no raids**, ending day costs no food and no long-rest payment is required
+- If day had **1+ raids**, ending day requires food payment to gain long-rest benefits
+- Restores: HP, spell slots, class feature uses, and can remove exhaustion based on final implementation rules
 
 **Short Rest:**
 - Can be taken **between multiple raids** on the same day
 - Takes no calendar time (abstracted as moments between encounters)
 - Restores: Some class features, Hit Dice healing, some spell slots (Warlock)
 
+**Food Cost to End Raided Day (Temporary Values):**
+- One raid on a day: **100 food**
+- Each additional raid that same day: **+50 food**
+- Formula: `food_required = 100 + 50 × (raids_today - 1)` for `raids_today >= 1`
+
+**Emergency Supply Purchase (If Food Is Insufficient):**
+- Convert missing food into emergency gold spend at **2× base food value**
+- Base conversion reference: **100 food = 50 gold**
+- Therefore emergency conversion baseline is effectively **100 food = 100 gold**
+- If player lacks both required food and required emergency gold, long rest fails and exhaustion increases by 1
+
 **Exhaustion:**
-- Players going extended periods without long rest accumulate exhaustion
+- Players unable to complete required long rest accumulate exhaustion
 - SRD 5.2.1 exhaustion rules apply:
   - Level 1: Disadvantage on ability checks
   - Level 2: Speed halved
@@ -82,13 +107,12 @@ Players can experience one of the following per day:
   - Level 5: Speed reduced to 0
   - Level 6: Death
 
+If player reaches max exhaustion, game over. If player dies by normal combat/death rules, game over.
+
 **Exhaustion Threshold (Balanced for Gameplay):**
-- 4-5 consecutive raid days without long rest = 1 exhaustion level
-- 7-8 consecutive raid days = 2 exhaustion levels
-- 10+ consecutive raid days = 3+ exhaustion levels
-- **Clear warning system**: UI indicator at 3 raid days ("Rest Recommended")
-- Flashing warning at 4 raid days ("Exhaustion Risk!")
-- Note: More lenient than strict 5e to allow strategic play
+- Immediate trigger for this baseline: each failed long-rest payment at day end adds 1 exhaustion
+- UI should clearly indicate required food/gold before confirming end-of-day
+- Additional pacing/balance tuning can be revisited after playtesting
 
 ### Random Events System
 
@@ -331,12 +355,14 @@ Stone Wall Reinforcement
 ### Essential Resource: Food
 
 **Food Requirement:**
-- Player requires 1 food per long rest
-- Each NPC requires 1 food per day (flat rate regardless of activity)
-- No food = cannot take long rest = exhaustion risk
+- Player starts with **100 food** in storage
+- Base storage capacity starts at **500 food**
+- Farmland production baseline: **50 food/day** (season-independent for now)
+- Ending day after raids consumes food based on raid count that day (see Rest Mechanics)
+- No food/gold for required long rest = exhaustion risk
 
 **Food Sources:**
-1. **Farming** - Primary source, sustainable, slow ramp-up
+1. **Farming** - Primary source, sustainable daily production
 2. **Purchasing** - Immediate but expensive, emergency option
 3. **Hunting/Foraging** - Random event rewards, unreliable
 4. **Trading** - Sell other resources to buy food
@@ -347,11 +373,26 @@ Stone Wall Reinforcement
 - **Preserved Food** - Lasts longer in storage, requires Cook proficiency
 
 **Implementation Approach:**
-- **Monthly Food Budget System** - Track food as monthly consumption vs production
-- Player sees: "Food Supply: 45/60 (15 days remaining)"
-- Warning at 10 days remaining, critical warning at 5 days
-- Avoids tedious daily micromanagement while maintaining resource pressure
-- Auto-purchase option available for players with sufficient gold
+- **Daily Production + Day-End Consumption**
+- Add production each day from farmland, capped by storage capacity
+- Consume food only when ending a day that had one or more raids
+- If food is short, auto-purchase emergency supplies using gold per emergency conversion
+- If neither food nor gold is sufficient, apply exhaustion instead of resting
+
+### Farmland Placement Baseline
+
+- Spawn one **10×10 clear farmland patch** near the keep area
+- Placement constraints:
+  - Not within **5 squares** of the keep
+  - Not within **5 squares** of forest tiles
+- This patch is the player's initial food generator and can be expanded/upgraded later
+
+### Root Cellar Access Baseline
+
+- Place a **1×2 descending staircase** against the wall opposite the keep gate
+- Stepping onto staircase transitions player to a **6×6 root cellar** map
+- Root cellar contains shelves/barrels and acts as food storage access point
+- Cellar UI will later host broader keep-storage inventory/upgrade menus
 
 ### Production Resources
 
@@ -582,7 +623,7 @@ Character at (10, 10) with 30 ft speed can move to:
 
 ---
 
-### Phase 1: Core Combat (CURRENT - v0.5)
+### Phase 1: Core Combat (v0.1-v0.5)
 ✅ Already complete
 
 ### Phase 2: Feature Integration (v0.6-0.8)
@@ -595,14 +636,16 @@ Character at (10, 10) with 30 ft speed can move to:
 - Status effects
 - Equipment system
 
-### Phase 3: Calendar & Rest System (v0.9-1.0)
+### Phase 3: Calendar & Rest System (v0.8.1-v1.0)
 **Implementation:** 1-2 sessions  
 **Playtesting Required:** 2-3 hours before Phase 4
 
-- Implement day/month calendar
-- Long rest / short rest mechanics
-- Exhaustion tracking (4-5 raid threshold)
-- Basic raid scheduling
+**Current Progress:** Slice 1 live; remaining items tracked in ROADMAP Priority 0
+
+- Implement 25-day seasonal calendar and 100-day year cycle
+- Generate full seasonal raid schedule at season start (forecast-ready)
+- Implement multi-raid same-day "End Day" chaining behavior
+- Implement day-end long rest costs (food, emergency gold fallback, exhaustion on failure)
 
 ### Phase 4: Event System (v1.1-1.3)
 **Implementation:** 2-3 sessions  
@@ -627,7 +670,7 @@ Character at (10, 10) with 30 ft speed can move to:
 **Playtesting Required:** 2-3 hours before Phase 7
 
 - Full economy implementation (gold, scrap, food)
-- Monthly food budget system (not daily tracking)
+- Food storage/production scaling upgrades and balancing
 - Buy/sell system
 - Resource management UI
 
@@ -672,13 +715,13 @@ Character at (10, 10) with 30 ft speed can move to:
   - Each phase must be fully playable before moving to next
   - Be willing to cut features that don't work
 
-- **Issue:** Food requirement for player + every NPC daily could be micromanagement hell
+- **Issue:** Daily food economics can become micromanagement-heavy
 - **Risk:** Turns fun game into spreadsheet management
-- **Resolution:** ✅ IMPLEMENTED
-  - Monthly food budget system specified (see Economy section)
-  - Warning at 10 days, critical at 5 days
-  - Auto-purchase option for players with gold
-  - No tedious daily tracking
+- **Resolution:** ✅ BASELINE DEFINED
+  - Food cost only applied when ending a day that had raids
+  - Deterministic formula based on raid count for clarity
+  - Emergency auto-purchase fallback via gold
+  - Exhaustion only when both food and gold are insufficient
 
 ### 🟡 Moderate Concerns
 
@@ -727,13 +770,12 @@ Character at (10, 10) with 30 ft speed can move to:
   - Requires UX testing in Phase 6
 
 **9. Calendar Pacing**
-- **Issue:** How many days per month? How fast does time pass?
+- **Issue:** Seasonal pacing and raid density across 25-day seasons
 - **Risk:** Too slow = grindy, too fast = no time to build
 - **Recommendation:**
-  - 28-30 days per month (familiar calendar)
-  - Level 1-5: ~3 raids/month = plenty of free time
-  - Level 6-10: ~5 raids/month = moderate pressure
-  - Level 11+: ~7 raids/month = high intensity
+  - Start with 25-day seasons, 100-day years, level-up at year end
+  - Use temporary raid formula (`10 × level` total, `2 × level` daily cap)
+  - Validate free-time windows for building, scouting, and events during playtests
   - Playtest extensively
 
 ---
@@ -769,12 +811,12 @@ Character at (10, 10) with 30 ft speed can move to:
 - Enemy variety creates different tactical choices
 
 **Phase 3: Calendar & Rest System**
-- Day/month pacing feels reasonable across 2-3 months
+- Day/season pacing feels reasonable across 2-3 seasons
 - Rest availability matches raid schedule without soft-locking
 - Exhaustion thresholds feel fair and visible
 
 **Phase 4: Event System**
-- 30 events seen with low repetition over 2-3 months
+- 30 events seen with low repetition over 2-3 seasons
 - Skill checks produce meaningful outcomes
 - Event weighting matches class/background expectations
 
@@ -784,8 +826,8 @@ Character at (10, 10) with 30 ft speed can move to:
 - Building time/cost feels worth the payoff
 
 **Phase 6: Economy & Resources**
-- Monthly food budget is easy to understand and plan for
-- Buy/sell prices feel reasonable across 2-3 months
+- Daily production + raid-day consumption flow is easy to understand and plan for
+- Buy/sell prices feel reasonable across 2-3 seasons
 - Resource caps create pressure without frustration
 
 **Phase 7: NPC System**
@@ -807,20 +849,20 @@ Character at (10, 10) with 30 ft speed can move to:
 
 ## Next Steps
 
-**DO NOT IMPLEMENT YET** - Current priority is Phase 2 (Feature Integration)
+**Current Focus:** Continue Phase 3 in slices with strict playability gates.
 
 **When Ready to Begin Long-Term Features:**
-1. Complete Phase 2 (class features, ranged combat, equipment)
-2. Review this document and refine based on lesson learned
-3. Start Phase 3 (calendar system) as first step toward broader vision
-4. Implement one phase at a time, ensuring each is fun before moving on
+1. Complete remaining Priority 0 baseline items in ROADMAP (season loop, raid chaining, rest-economy edge cases)
+2. Validate one full season simulation and low-resource failure paths
+3. Move to next Phase 3 slice (one event type + one keep upgrade path)
+4. Continue one playable slice at a time before broader scope expansion
 
 **Documentation Updates:**
 - ROADMAP.md updated to reference this vision
 - ARCHITECTURE.md notes long-term structural needs
-- Implementation begins only after Phase 2 complete
+- Keep this document design-focused; implementation status remains source-of-truth in CHANGELOG + ROADMAP
 
 ---
 
-**Last Updated:** 2026-02-10  
+**Last Updated:** 2026-02-17
 **Status:** Design specification, awaiting Phase 2 completion before implementation

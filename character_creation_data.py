@@ -97,6 +97,39 @@ CLASS_SKILL_COUNTS = {
     "Wizard": 2,
 }
 
+MUSICAL_INSTRUMENT_OPTIONS = [
+    "Bagpipes",
+    "Drum",
+    "Dulcimer",
+    "Flute",
+    "Horn",
+    "Lute",
+    "Lyre",
+    "Pan Flute",
+    "Shawm",
+    "Viol",
+]
+
+ARTISAN_TOOL_OPTIONS = [
+    "Alchemist's Supplies",
+    "Brewer's Supplies",
+    "Calligrapher's Supplies",
+    "Carpenter's Tools",
+    "Cartographer's Tools",
+    "Cobbler's Tools",
+    "Cook's Utensils",
+    "Glassblower's Tools",
+    "Jeweler's Tools",
+    "Leatherworker's Tools",
+    "Mason's Tools",
+    "Painter's Supplies",
+    "Potter's Tools",
+    "Smith's Tools",
+    "Tinker's Tools",
+    "Weaver's Tools",
+    "Woodcarver's Tools",
+]
+
 ABILITY_CODES = ["STR", "DEX", "CON", "INT", "WIS", "CHA"]
 
 ORIGIN_FEAT_OPTIONS = [
@@ -144,7 +177,53 @@ TOOL_PROFICIENCY_OPTIONS = [
     "Playing Card Set",
     "Three-Dragon Ante Set",
     "Musical Instrument",
+    *MUSICAL_INSTRUMENT_OPTIONS,
 ]
+
+CLASS_TOOL_OPTIONS = {
+    "Barbarian": [],
+    "Bard": MUSICAL_INSTRUMENT_OPTIONS,
+    "Cleric": [],
+    "Druid": ["Herbalism Kit"],
+    "Fighter": [],
+    "Monk": ARTISAN_TOOL_OPTIONS + MUSICAL_INSTRUMENT_OPTIONS,
+    "Paladin": [],
+    "Ranger": [],
+    "Rogue": ["Thieves' Tools"],
+    "Sorcerer": [],
+    "Warlock": [],
+    "Wizard": [],
+}
+
+CLASS_TOOL_COUNTS = {
+    "Barbarian": 0,
+    "Bard": 3,
+    "Cleric": 0,
+    "Druid": 1,
+    "Fighter": 0,
+    "Monk": 1,
+    "Paladin": 0,
+    "Ranger": 0,
+    "Rogue": 1,
+    "Sorcerer": 0,
+    "Warlock": 0,
+    "Wizard": 0,
+}
+
+CLASS_WEAPON_MASTERY_COUNTS = {
+    "Barbarian": 2,
+    "Fighter": 3,
+    "Paladin": 2,
+    "Ranger": 2,
+    "Rogue": 2,
+}
+
+ROGUE_EXTRA_WEAPON_PROFICIENCIES = {
+    "Hand Crossbow",
+    "Longsword",
+    "Rapier",
+    "Shortsword",
+}
 
 SPECIES_OPTIONS = [
     "Dragonborn",
@@ -221,3 +300,56 @@ def point_buy_cost(score: int) -> int:
 
 def point_buy_delta(current: int, target: int) -> int:
     return point_buy_cost(target) - point_buy_cost(current)
+
+
+def get_class_skill_selection(class_name: str) -> tuple[list, int]:
+    options = CLASS_SKILL_OPTIONS.get(class_name, ALL_SKILLS)
+    count = CLASS_SKILL_COUNTS.get(class_name, 0)
+    return list(options), count
+
+
+def get_class_tool_selection(class_name: str) -> tuple[list, int]:
+    options = CLASS_TOOL_OPTIONS.get(class_name, [])
+    count = CLASS_TOOL_COUNTS.get(class_name, 0)
+    return list(options), count
+
+
+def get_class_weapon_mastery_count(class_name: str) -> int:
+    return int(CLASS_WEAPON_MASTERY_COUNTS.get(class_name, 0))
+
+
+def class_has_weapon_mastery(class_name: str) -> bool:
+    return get_class_weapon_mastery_count(class_name) > 0
+
+
+def class_is_weapon_proficient(class_name: str, weapon_name: str, weapon) -> bool:
+    """Return whether class has weapon proficiency for this weapon.
+
+    Uses explicit class rules for current level-1 implementation.
+    """
+    class_key = (class_name or "").strip()
+    proficiency_type = str(getattr(weapon, "proficiency_type", ""))
+
+    if class_key in {"Barbarian", "Fighter", "Paladin", "Ranger"}:
+        return True
+
+    if class_key == "Rogue":
+        if proficiency_type.startswith("Simple"):
+            return True
+        return weapon_name in ROGUE_EXTRA_WEAPON_PROFICIENCIES
+
+    if class_key == "Bard":
+        if proficiency_type.startswith("Simple"):
+            return True
+        return weapon_name in {"Hand Crossbow", "Longsword", "Rapier", "Shortsword"}
+
+    if class_key in {"Cleric", "Druid", "Warlock"}:
+        return proficiency_type.startswith("Simple")
+
+    if class_key in {"Sorcerer", "Wizard"}:
+        return weapon_name in {"Dagger", "Dart", "Sling", "Quarterstaff", "Light Crossbow"}
+
+    if class_key == "Monk":
+        return proficiency_type.startswith("Simple") or weapon_name == "Shortsword"
+
+    return False

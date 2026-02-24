@@ -80,6 +80,7 @@ def build_character_from_preset(preset: Dict[str, Any]) -> Character:
         attack_range=_class_attack_range(class_name),
         skill_proficiencies=preset.get("skill_proficiencies", []),
         tool_proficiencies=preset.get("tool_proficiencies", []),
+        weapon_masteries=preset.get("weapon_masteries", []),
         species=species,
         species_traits=preset.get("species_traits", {}),
         origin_feats=preset.get("origin_feats", []),
